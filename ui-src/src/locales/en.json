@@ -1,0 +1,32 @@
+{
+    "app": {
+        "title": "MagiskSSH Manager",
+        "status": {
+            "title": "Service Status",
+            "checking": "Checking...",
+            "running": "Running",
+            "stopped": "Stopped",
+            "toggling": "Toggling...",
+            "btn_start": "Start Service",
+            "btn_stop": "Stop Service"
+        },
+        "config": {
+            "title": "sshd_config",
+            "editor_placeholder": "Loading...",
+            "btn_save": "Save Configuration",
+            "btn_saving": "Saving..."
+        },
+        "logs": {
+            "title": "Real-time Logs",
+            "btn_clear": "Clear"
+        },
+        "auth": {
+            "title": "Authorized Keys",
+            "input_placeholder": "Paste new SSH public key here (ssh-rsa, ssh-ed25519...)",
+            "btn_add": "Add Key",
+            "btn_adding": "Adding...",
+            "btn_delete": "Delete",
+            "empty": "No authorized keys found."
+        }
+    }
+}

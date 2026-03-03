@@ -1,0 +1,125 @@
+name: Build MagiskSSH Module
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - arm64
+          - x86_64
+
+env:
+  ANDROID_NDK_VERSION: r25c
+  ANDROID_NDK_PATH: /opt/android-ndk
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: all
+            artifact_name: MagiskSSH-all
+            build_condition: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.build_type == 'all' }}
+          - arch: arm64
+            artifact_name: MagiskSSH-arm64
+            build_condition: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'arm64' }}
+          - arch: x86_64
+            artifact_name: MagiskSSH-x86_64
+            build_condition: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'x86_64' }}
+
+    if: ${{ matrix.build_condition }}
+
+    steps:
+      - name: Checkout GitLab repository
+        run: |
+          git clone https://gitlab.com/d4rcm4rc/MagiskSSH.git magisk-ssh
+          cd magisk-ssh
+          echo "REPO_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Replace SSH data directory path
+        run: |
+          cd magisk-ssh
+          echo "Replacing /data/ssh with /data/adb/ssh in all files..."
+          find . -type f \( -name "*.mk" -o -name "*.sh" -o -name "*.c" -o -name "*.h" -o -name "*.conf" -o -name "*.txt" -o -name "*.md" -o -name "Makefile" -o -name "*.in" -o -name "module.prop" \) -exec sed -i 's|/data/ssh|/data/adb/ssh|g' {} +
+          echo "Replacement complete."
+          echo "Modified files:"
+          grep -r "/data/adb/ssh" . --include="*.mk" --include="*.sh" --include="*.c" --include="*.h" --include="*.conf" --include="Makefile" --include="*.in" -l || true
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            make \
+            wget \
+            p7zip-full \
+            zip \
+            python3 \
+            build-essential \
+            autoconf \
+            automake \
+            libtool
+
+      - name: Setup Android NDK
+        run: |
+          echo "Downloading Android NDK ${ANDROID_NDK_VERSION}..."
+          wget -q https://dl.google.com/android/repository/android-ndk-${ANDROID_NDK_VERSION}-linux.zip
+          unzip -q android-ndk-${ANDROID_NDK_VERSION}-linux.zip
+          mv android-ndk-${ANDROID_NDK_VERSION} ${ANDROID_NDK_PATH}
+          rm android-ndk-${ANDROID_NDK_VERSION}-linux.zip
+          echo "ANDROID_ROOT=${ANDROID_NDK_PATH}" >> $GITHUB_ENV
+
+      - name: Build MagiskSSH module (${{ matrix.arch }})
+        run: |
+          cd magisk-ssh
+          mkdir -p build
+          cd build
+          export ANDROID_ROOT=${ANDROID_NDK_PATH}
+          if [ "${{ matrix.arch }}" = "all" ]; then
+            make -f ../all_arches.mk -j$(nproc) zip
+          else
+            make -f ../Makefile ARCH=${{ matrix.arch }} -j$(nproc) zip || make -f ../all_arches.mk -j$(nproc) zip
+          fi
+
+      - name: Find built module
+        id: find_module
+        run: |
+          cd magisk-ssh/build
+          MODULE_FILE=$(find . -name "*.zip" -type f | head -n 1)
+          if [ -n "$MODULE_FILE" ]; then
+            echo "module_name=$(basename $MODULE_FILE)" >> $GITHUB_OUTPUT
+            echo "Found module: $MODULE_FILE"
+          else
+            echo "No module zip file found!"
+            exit 1
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}-${{ env.REPO_COMMIT }}
+          path: magisk-ssh/build/${{ steps.find_module.outputs.module_name }}
+          retention-days: ${{ matrix.arch == 'all' && 30 || 7 }}
+
+      - name: Create release on tag
+        if: ${{ startsWith(github.ref, 'refs/tags/') && matrix.arch == 'all' }}
+        uses: softprops/action-gh-release@v1
+        with:
+          files: magisk-ssh/build/${{ steps.find_module.outputs.module_name }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

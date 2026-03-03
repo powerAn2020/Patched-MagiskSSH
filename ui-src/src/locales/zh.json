@@ -1,0 +1,32 @@
+{
+    "app": {
+        "title": "MagiskSSH 管理器",
+        "status": {
+            "title": "服务状态",
+            "checking": "检查中...",
+            "running": "运行中",
+            "stopped": "已停止",
+            "toggling": "切换中...",
+            "btn_start": "启动服务",
+            "btn_stop": "停止服务"
+        },
+        "config": {
+            "title": "sshd_config",
+            "editor_placeholder": "加载中...",
+            "btn_save": "保存配置",
+            "btn_saving": "保存中..."
+        },
+        "logs": {
+            "title": "实时日志",
+            "btn_clear": "清空"
+        },
+        "auth": {
+            "title": "公钥管理 (Authorized Keys)",
+            "input_placeholder": "在此粘贴新的 SSH 公钥 (ssh-rsa, ssh-ed25519...)",
+            "btn_add": "添加密钥",
+            "btn_adding": "添加中...",
+            "btn_delete": "删除",
+            "empty": "尚未添加任何授权密钥。"
+        }
+    }
+}
