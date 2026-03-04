@@ -74,19 +74,39 @@ jobs:
           cd magisk-ssh
           echo "REPO_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
-      # 所有 patch/sed/make 操作须在 magisk-ssh/ 目录内执行
-      - name: Patch Paths (/data/ssh/ -> /data/adb/ssh/)
+      # 只替换运行时脚本/配置文件中的路径，绝对不碰 .mk 构建规则
+      - name: Patch runtime paths (/data/ssh -> /data/adb/ssh)
         working-directory: magisk-ssh
         run: |
-          find . -type f \( \
-            -name "*.patch" -o -name "*.sh" -o -name "*.mk" \
-            -o -name "*.conf" -o -name "install.sh" \
-          \) -exec sed -i 's|/data/ssh/|/data/adb/ssh/|g' {} +
-          # Handle paths without trailing slash too (e.g. piddir=/data/ssh)
-          find . -type f \( -name "*.mk" -o -name "*.sh" -o -name "*.conf" \) \
-            -exec sed -i 's|=/data/ssh$|=/data/adb/ssh|g' {} +
-          echo "Patched files:"
-          grep -rl "/data/adb/ssh" . --include="*.sh" --include="*.mk" --include="*.conf" --include="*.patch" || true
+          # Runtime shell scripts
+          find . -type f -name "*.sh" \
+            -exec sed -i 's|/data/ssh|/data/adb/ssh|g' {} +
+          # opensshd.init (no .sh extension)
+          [ -f common/opensshd.init ] && sed -i 's|/data/ssh|/data/adb/ssh|g' common/opensshd.init
+          [ -f opensshd.init ]        && sed -i 's|/data/ssh|/data/adb/ssh|g' opensshd.init
+          # Any .conf / config files
+          find . -type f -name "*.conf" \
+            -exec sed -i 's|/data/ssh|/data/adb/ssh|g' {} +
+          # .patch files (applied against source, not the build system)
+          find . -type f -name "*.patch" \
+            -exec sed -i 's|/data/ssh|/data/adb/ssh|g' {} +
+          echo "Patched runtime files:"
+          grep -rl "/data/adb/ssh" . --include="*.sh" --include="*.conf" --include="*.patch" \
+            --include="opensshd.init" 2>/dev/null || true
+
+      # configure flags 在 .mk 里的 --sysconfdir / --with-pid-dir，精确替换这两个 flag
+      - name: Patch configure flags (/data/ssh -> /data/adb/ssh)
+        working-directory: magisk-ssh
+        run: |
+          find . -type f -name "*.mk" | xargs grep -l "sysconfdir\|pid-dir\|piddir" 2>/dev/null | while read f; do
+            sed -i \
+              -e 's|--sysconfdir=/data/ssh|--sysconfdir=/data/adb/ssh|g' \
+              -e 's|--with-pid-dir=/data/ssh|--with-pid-dir=/data/adb/ssh|g' \
+              -e 's|sysconfdir=/data/ssh|sysconfdir=/data/adb/ssh|g' \
+              -e 's|piddir=/data/ssh|piddir=/data/adb/ssh|g' \
+              "$f"
+            echo "  Patched configure flags in: $f"
+          done
 
       - name: Build Module
         working-directory: magisk-ssh
