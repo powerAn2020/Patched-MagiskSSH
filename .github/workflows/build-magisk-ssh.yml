@@ -146,15 +146,10 @@ jobs:
           # WebUI build output → module root webroot/
           cp -r "$GITHUB_WORKSPACE/webroot-dist/"* "$INJECT_DIR/webroot/"
 
-          # customize.sh → module root (replaces legacy install.sh)
-          cp "$GITHUB_WORKSPACE/customize.sh" "$INJECT_DIR/customize.sh"
-          chmod 755 "$INJECT_DIR/customize.sh"
-
-          # action.sh → module ROOT (KernelSU hardcodes $MODPATH/action.sh)
-          cp "$GITHUB_WORKSPACE/scripts/action.sh" "$INJECT_DIR/action.sh"
+          # action.sh + customize.sh → module ROOT
+          cp "$GITHUB_WORKSPACE/scripts/action.sh"    "$INJECT_DIR/action.sh"
           cp "$GITHUB_WORKSPACE/scripts/customize.sh" "$INJECT_DIR/customize.sh"
-          chmod 755 "$INJECT_DIR/action.sh"
-          chmod 755 "$INJECT_DIR/customize.sh"
+          chmod 755 "$INJECT_DIR/action.sh" "$INJECT_DIR/customize.sh"
 
           # api.sh and other scripts → scripts/ subdir (called by WebUI via api.sh)
           for f in "$GITHUB_WORKSPACE/scripts/"*.sh; do
