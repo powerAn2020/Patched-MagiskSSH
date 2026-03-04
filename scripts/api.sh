@@ -1,0 +1,264 @@
+#!/system/bin/sh
+# =============================================================================
+# MagiskSSH WebUI API Script
+# Called by ksu.exec() / ksu.spawn() from the frontend WebUI.
+#
+# Usage: sh api.sh <action> [args...]
+#
+# Actions:
+#   status        - Check if sshd is running, return JSON status
+#   start         - Start sshd service
+#   stop          - Stop sshd service
+#   restart       - Restart sshd service
+#   read_config   - Read sshd_config content (base64 encoded)
+#   write_config  - Write base64-encoded stdin to sshd_config
+#   read_keys     - Read authorized_keys content
+#   write_keys    - Write stdin to authorized_keys
+#   add_key       - Append a key from stdin to authorized_keys
+#   delete_key    - Delete key at line number ($2)
+#   tail_log      - Tail -f the ssh log (for spawn, streaming)
+#   read_log      - Read ssh log snapshot (for exec, one-shot)
+# =============================================================================
+
+# --- Paths -------------------------------------------------------------------
+# Derive MODDIR from this script's own location: .../scripts/api.sh → ...
+MODDIR="$(dirname "$(dirname "$(readlink -f "$0")")")"
+
+# MagiskSSH stores persistent data under /data/adb/ssh (patched from /data/ssh)
+SSHDIR="/data/adb/ssh"
+
+SSHD_BIN="/system/bin/sshd"
+SSHD_CONFIG="${SSHDIR}/sshd_config"
+PID_FILE="${SSHDIR}/sshd.pid"
+
+# MagiskSSH has two users: root and shell, each with their own authorized_keys
+AUTH_KEYS_ROOT="${SSHDIR}/root/.ssh/authorized_keys"
+AUTH_KEYS_SHELL="${SSHDIR}/shell/.ssh/authorized_keys"
+# Default to root's authorized_keys for WebUI management
+AUTHORIZED_KEYS="${AUTH_KEYS_ROOT}"
+
+# sshd does not write a log file by default; we redirect via -E flag when
+# starting through the WebUI. On stock MagiskSSH (opensshd.init) there is
+# no log file — so we create one if needed.
+LOG_FILE="${SSHDIR}/sshd.log"
+
+# The original init script shipped with the module
+INIT_SCRIPT="${MODDIR}/opensshd.init"
+
+# --- Helpers -----------------------------------------------------------------
+
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+json_ok() {
+  local msg
+  msg=$(json_escape "$1")
+  printf '{"errno":0,"stdout":"%s","stderr":""}\n' "$msg"
+}
+
+json_err() {
+  local msg
+  msg=$(json_escape "$1")
+  printf '{"errno":1,"stdout":"","stderr":"%s"}\n' "$msg"
+}
+
+get_pid() {
+  # First try the PID file
+  if [ -f "$PID_FILE" ]; then
+    local pid
+    pid=$(cat "$PID_FILE" 2>/dev/null)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      echo "$pid"
+      return 0
+    fi
+  fi
+  # Fallback to pidof; take only the first PID (master process)
+  pidof sshd 2>/dev/null | awk '{print $1}'
+}
+
+ensure_dirs() {
+  mkdir -p "${SSHDIR}/root/.ssh" 2>/dev/null
+  mkdir -p "${SSHDIR}/shell/.ssh" 2>/dev/null
+  touch "$AUTHORIZED_KEYS" 2>/dev/null
+  chmod 600 "$AUTHORIZED_KEYS" 2>/dev/null
+}
+
+# --- Actions -----------------------------------------------------------------
+
+do_status() {
+  local pid port
+  pid=$(get_pid)
+  if [ -n "$pid" ]; then
+    port=$(grep -i "^Port " "$SSHD_CONFIG" 2>/dev/null | awk '{print $2}')
+    [ -z "$port" ] && port="22"
+    printf '{"running":true,"pid":"%s","port":"%s"}\n' "$pid" "$port"
+  else
+    printf '{"running":false,"pid":"","port":""}\n'
+  fi
+}
+
+do_start() {
+  local pid
+  pid=$(get_pid)
+  if [ -n "$pid" ]; then
+    json_ok "sshd already running (pid ${pid})"
+    return 0
+  fi
+
+  # Use the module's opensshd.init if available (it handles key generation etc.)
+  if [ -x "$INIT_SCRIPT" ]; then
+    "$INIT_SCRIPT" start >/dev/null 2>&1
+  elif [ -x "$SSHD_BIN" ]; then
+    # Direct start with log redirect
+    "$SSHD_BIN" -f "$SSHD_CONFIG" -E "$LOG_FILE" >/dev/null 2>&1
+  else
+    json_err "sshd binary not found"
+    return 1
+  fi
+
+  sleep 1
+  pid=$(get_pid)
+  if [ -n "$pid" ]; then
+    json_ok "sshd started (pid ${pid})"
+  else
+    json_err "sshd failed to start"
+    return 1
+  fi
+}
+
+do_stop() {
+  local pid
+  pid=$(get_pid)
+  if [ -z "$pid" ]; then
+    json_ok "sshd is not running"
+    return 0
+  fi
+
+  if [ -x "$INIT_SCRIPT" ]; then
+    "$INIT_SCRIPT" stop >/dev/null 2>&1
+  else
+    kill "$pid" 2>/dev/null
+  fi
+
+  sleep 1
+  pid=$(get_pid)
+  if [ -z "$pid" ]; then
+    json_ok "sshd stopped"
+  else
+    kill -9 "$pid" 2>/dev/null
+    json_ok "sshd force killed"
+  fi
+}
+
+do_restart() {
+  do_stop >/dev/null 2>&1
+  sleep 1
+  do_start
+}
+
+do_read_config() {
+  if [ -f "$SSHD_CONFIG" ]; then
+    base64 "$SSHD_CONFIG"
+  else
+    json_err "Config file not found: ${SSHD_CONFIG}"
+    return 1
+  fi
+}
+
+do_write_config() {
+  local b64
+  b64=$(cat)
+  if [ -z "$b64" ]; then
+    json_err "Empty config content"
+    return 1
+  fi
+  printf '%s' "$b64" | base64 -d > "$SSHD_CONFIG"
+  chmod 600 "$SSHD_CONFIG"
+  json_ok "Config saved"
+}
+
+do_read_keys() {
+  ensure_dirs
+  if [ -f "$AUTHORIZED_KEYS" ]; then
+    cat "$AUTHORIZED_KEYS"
+  else
+    echo ""
+  fi
+}
+
+do_write_keys() {
+  ensure_dirs
+  local content
+  content=$(cat)
+  printf '%s\n' "$content" > "$AUTHORIZED_KEYS"
+  chmod 600 "$AUTHORIZED_KEYS"
+  json_ok "Keys saved"
+}
+
+do_add_key() {
+  ensure_dirs
+  local key
+  key=$(cat)
+  if [ -z "$key" ]; then
+    json_err "Empty key"
+    return 1
+  fi
+  printf '%s\n' "$key" >> "$AUTHORIZED_KEYS"
+  chmod 600 "$AUTHORIZED_KEYS"
+  json_ok "Key added"
+}
+
+do_delete_key() {
+  local line_num="$1"
+  if [ -z "$line_num" ]; then
+    json_err "Line number required"
+    return 1
+  fi
+  case "$line_num" in
+    ''|*[!0-9]*) json_err "Invalid line number: ${line_num}"; return 1 ;;
+  esac
+  ensure_dirs
+  sed -i "${line_num}d" "$AUTHORIZED_KEYS"
+  json_ok "Key at line ${line_num} deleted"
+}
+
+do_tail_log() {
+  # Designed for ksu.spawn() — streams continuously
+  if [ ! -f "$LOG_FILE" ]; then
+    touch "$LOG_FILE"
+  fi
+  exec tail -f "$LOG_FILE"
+}
+
+do_read_log() {
+  if [ -f "$LOG_FILE" ]; then
+    tail -n 200 "$LOG_FILE"
+  else
+    echo ""
+  fi
+}
+
+# --- Main Dispatcher ---------------------------------------------------------
+
+ACTION="$1"
+shift
+
+case "$ACTION" in
+  status)       do_status ;;
+  start)        do_start ;;
+  stop)         do_stop ;;
+  restart)      do_restart ;;
+  read_config)  do_read_config ;;
+  write_config) do_write_config ;;
+  read_keys)    do_read_keys ;;
+  write_keys)   do_write_keys ;;
+  add_key)      do_add_key ;;
+  delete_key)   do_delete_key "$1" ;;
+  tail_log)     do_tail_log ;;
+  read_log)     do_read_log ;;
+  *)
+    json_err "Unknown action: ${ACTION}"
+    exit 1
+    ;;
+esac

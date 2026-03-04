@@ -1,24 +1,18 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
-    import { spawn } from "./ksu";
+    import { spawnLogTail } from "./ksu";
     import { _ } from "svelte-i18n";
     import { Terminal } from "lucide-svelte";
 
-    const LOG_FILE = "/data/adb/modules/MagiskSSH/ssh.log"; // Adjust depending on actual loc
     let logs: string[] = $state([]);
     let logsContainer: HTMLElement;
     let killSpawn: (() => void) | null = null;
     let autoScroll = $state(true);
 
     function startTail() {
-        // Note: To prevent busy-waiting loop in kernelsu wrapper, it's highly recommended
-        // to run a continuous tail stream
-        killSpawn = spawn(
-            "tail",
-            ["-f", LOG_FILE],
+        killSpawn = spawnLogTail(
             (chunk) => {
                 logs = [...logs, ...chunk.split("\n").filter(Boolean)];
-                // Keep only last 200 lines to preserve memory
                 if (logs.length > 200) {
                     logs = logs.slice(-200);
                 }
@@ -28,12 +22,8 @@
                     });
                 }
             },
-            (err) => {
-                console.error("Log error:", err);
-            },
-            (code) => {
-                console.log(`Tail exited with code ${code}`);
-            },
+            (err) => console.error("Log error:", err),
+            (code) => console.log(`Tail exited with code ${code}`),
         );
     }
 
@@ -41,26 +31,21 @@
         logs = [];
     }
 
-    onMount(() => {
-        startTail();
-    });
+    onMount(startTail);
 
     onDestroy(() => {
-        if (killSpawn) {
-            killSpawn();
-        }
+        if (killSpawn) killSpawn();
     });
 
     function handleScroll() {
         if (!logsContainer) return;
         const { scrollTop, scrollHeight, clientHeight } = logsContainer;
-        // Allow small 10px tolerance for "bottom"
         autoScroll = scrollHeight - scrollTop - clientHeight < 10;
     }
 </script>
 
 <div
-    class="bg-slate-950 shadow-sm rounded-xl border border-slate-800 overflow-hidden mt-6 flex flex-col h-[400px]"
+    class="bg-slate-950 shadow-sm rounded-xl border border-slate-800 overflow-hidden flex flex-col h-[400px]"
 >
     <div
         class="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800"

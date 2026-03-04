@@ -1,10 +1,9 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { exec } from "./ksu";
+    import { api, apiWithStdin } from "./ksu";
     import { _ } from "svelte-i18n";
     import { Trash2, KeyRound } from "lucide-svelte";
 
-    const KEYS_FILE = "/data/adb/modules/MagiskSSH/authorized_keys"; // May need to be ~/.ssh/authorized_keys depending on module impl
     let keys: string[] = $state([]);
     let newKey = $state("");
     let isAdding = $state(false);
@@ -13,7 +12,7 @@
     async function loadKeys() {
         isLoading = true;
         try {
-            const res = await exec(`cat ${KEYS_FILE}`);
+            const res = await api("read_keys");
             if (res.stdout.trim()) {
                 keys = res.stdout
                     .trim()
@@ -22,47 +21,43 @@
             } else {
                 keys = [];
             }
-        } catch (e) {
-            console.error(e);
+        } catch {
             keys = [];
         } finally {
             isLoading = false;
         }
     }
 
-    async function saveKeys() {
-        const content = keys.join("\n");
-        await exec(`cat <<EOF > ${KEYS_FILE}\n${content}\nEOF`);
-    }
-
     async function addKey() {
         if (!newKey.trim()) return;
         isAdding = true;
-        keys = [...keys, newKey.trim()];
-        await saveKeys();
-        newKey = "";
-        isAdding = false;
+        try {
+            await apiWithStdin("add_key", newKey.trim());
+            keys = [...keys, newKey.trim()];
+            newKey = "";
+        } finally {
+            isAdding = false;
+        }
     }
 
     async function deleteKey(index: number) {
-        keys.splice(index, 1);
-        await saveKeys();
-        // Re-assign to trigger reactivity
-        keys = [...keys];
+        const lineNum = index + 1; // sed is 1-indexed
+        await api("delete_key", lineNum.toString());
+        keys = keys.filter((_, i) => i !== index);
     }
 
     onMount(loadKeys);
 </script>
 
 <div
-    class="bg-white dark:bg-slate-900 shadow-sm rounded-xl p-6 border border-slate-200 dark:border-slate-800 mt-6"
+    class="bg-white dark:bg-slate-900 shadow-sm rounded-xl p-6 border border-slate-200 dark:border-slate-800"
 >
     <div class="flex items-center gap-2 mb-6">
         <KeyRound class="w-5 h-5 text-indigo-500" />
         <h2 class="text-lg font-semibold">{$_("app.auth.title")}</h2>
     </div>
 
-    <div class="space-y-4 mb-6">
+    <div class="space-y-3 mb-6">
         {#if isLoading}
             <div
                 class="animate-pulse bg-slate-100 dark:bg-slate-800 h-12 rounded-lg w-full"

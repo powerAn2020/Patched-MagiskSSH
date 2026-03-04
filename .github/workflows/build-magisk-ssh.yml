@@ -8,8 +8,37 @@ on:
   workflow_dispatch:
 
 jobs:
+  build-webui:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ui-src/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ui-src
+
+      - name: Build WebUI
+        run: npm run build
+        working-directory: ui-src
+
+      - name: Upload webroot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webroot
+          path: webroot/
+          retention-days: 1
+
   build:
     runs-on: ubuntu-latest
+    needs: build-webui
 
     steps:
       - name: Checkout Source
@@ -36,35 +65,66 @@ jobs:
             p7zip-full \
             perl \
             autoconf \
-            patch
+            patch \
+            zip
 
-      # patches/*.patch 和各 .sh 在 Make 下载/展开源码前修改，时序正确
+      - name: Clone GitLab MagiskSSH repository
+        run: |
+          git clone https://gitlab.com/d4rcm4rc/MagiskSSH.git magisk-ssh
+          cd magisk-ssh
+          echo "REPO_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      # 所有 patch/sed/make 操作须在 magisk-ssh/ 目录内执行
       - name: Patch Paths (/data/ssh/ -> /data/adb/ssh/)
+        working-directory: magisk-ssh
         run: |
-          sed -i 's|/data/ssh/|/data/adb/ssh/|g' patches/*.patch
-          sed -i 's|/data/ssh/|/data/adb/ssh/|g' module_data/install.sh
-          sed -i 's|/data/ssh/|/data/adb/ssh/|g' module_data/uninstall.sh
-          sed -i 's|/data/ssh/|/data/adb/ssh/|g' module_data/common/service.sh
-
-      # 同时替换 openssh.mk 中 configure 阶段写死的 --sysconfdir 和 --with-pid-dir
-      - name: Patch openssh.mk Configure Flags
-        run: |
-          sed -i 's|--sysconfdir=/data/ssh|--sysconfdir=/data/adb/ssh|g' openssh.mk
-          sed -i 's|--with-pid-dir=/data/ssh|--with-pid-dir=/data/adb/ssh|g' openssh.mk
+          find . -type f \( \
+            -name "*.patch" -o -name "*.sh" -o -name "*.mk" \
+            -o -name "*.conf" -o -name "install.sh" \
+          \) -exec sed -i 's|/data/ssh/|/data/adb/ssh/|g' {} +
+          # Handle paths without trailing slash too (e.g. piddir=/data/ssh)
+          find . -type f \( -name "*.mk" -o -name "*.sh" -o -name "*.conf" \) \
+            -exec sed -i 's|=/data/ssh$|=/data/adb/ssh|g' {} +
+          echo "Patched files:"
+          grep -rl "/data/adb/ssh" . --include="*.sh" --include="*.mk" --include="*.conf" --include="*.patch" || true
 
       - name: Build Module
+        working-directory: magisk-ssh
         env:
           ANDROID_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           mkdir -p build
-          # BUILD_DIR 必须是绝对路径传给 make，避免 realpath 失败
           make -f all_arches.mk \
             BUILD_DIR="$(pwd)/build" \
             ANDROID_ROOT="$ANDROID_ROOT" \
             -j$(nproc) zip
 
+      - name: Download webroot artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: webroot
+          path: webroot-dist
+
+      - name: Inject WebUI and scripts into module zip
+        working-directory: magisk-ssh/build
+        run: |
+          MODULE_ZIP=$(find . -name "*.zip" -type f | head -n 1)
+          if [ -z "$MODULE_ZIP" ]; then
+            echo "::error::No module zip found after build!"
+            exit 1
+          fi
+          echo "Injecting WebUI into $MODULE_ZIP..."
+          INJECT_DIR=$(mktemp -d)
+          mkdir -p "$INJECT_DIR/webroot" "$INJECT_DIR/scripts"
+          cp -r "$GITHUB_WORKSPACE/webroot-dist/"* "$INJECT_DIR/webroot/"
+          cp "$GITHUB_WORKSPACE/scripts/api.sh" "$INJECT_DIR/scripts/"
+          chmod 755 "$INJECT_DIR/scripts/api.sh"
+          (cd "$INJECT_DIR" && zip -r "$GITHUB_WORKSPACE/magisk-ssh/build/$MODULE_ZIP" webroot/ scripts/)
+          rm -rf "$INJECT_DIR"
+          echo "Injection complete."
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: magisk_ssh_v0.26.zip
-          path: build/magisk_ssh_v*.zip
+          name: magisk-ssh-${{ env.REPO_COMMIT }}
+          path: magisk-ssh/build/*.zip

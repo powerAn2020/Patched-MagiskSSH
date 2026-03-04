@@ -1,39 +1,47 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { exec, spawn } from "./ksu";
+    import { api } from "./ksu";
     import { _ } from "svelte-i18n";
 
     let status = $state("");
     let isRunning = $state(false);
+    let pid = $state("");
+    let port = $state("");
+    let isToggling = $state(false);
 
     async function checkStatus() {
         status = $_("app.status.checking");
-        // Assuming pidof sshd or similar logic stands here
-        const res = await exec("pidof sshd");
-        if (res.stdout.trim().length > 0) {
-            status = $_("app.status.running");
-            isRunning = true;
-        } else {
+        try {
+            const res = await api("status");
+            const data = JSON.parse(res.stdout);
+            isRunning = data.running;
+            pid = data.pid || "";
+            port = data.port || "22";
+            status = isRunning
+                ? $_("app.status.running")
+                : $_("app.status.stopped");
+        } catch {
             status = $_("app.status.stopped");
             isRunning = false;
         }
     }
 
     async function toggleService() {
+        isToggling = true;
         status = $_("app.status.toggling");
-        // Dummy toggle logic - replace with actual Magisk module action script
-        if (isRunning) {
-            await exec("pkill sshd");
-        } else {
-            // Starting SSHD, this might be a slow operation so spawn could be used for logs, but we'll use exec for now
-            await exec("sshd");
+        try {
+            if (isRunning) {
+                await api("stop");
+            } else {
+                await api("start");
+            }
+        } finally {
+            isToggling = false;
         }
-        setTimeout(checkStatus, 1000);
+        await checkStatus();
     }
 
-    onMount(() => {
-        checkStatus();
-    });
+    onMount(checkStatus);
 </script>
 
 <div
@@ -50,12 +58,20 @@
                     ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
                     : 'bg-rose-500'}"
             ></div>
-            <span class="font-medium">{status}</span>
+            <div>
+                <span class="font-medium">{status}</span>
+                {#if isRunning && pid}
+                    <span class="text-xs text-slate-400 ml-2"
+                        >PID: {pid} · Port: {port}</span
+                    >
+                {/if}
+            </div>
         </div>
 
         <button
             onclick={toggleService}
-            class="px-4 py-2 rounded-md text-sm font-medium transition-colors {isRunning
+            disabled={isToggling}
+            class="px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 {isRunning
                 ? 'bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20'
                 : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20'}"
         >
