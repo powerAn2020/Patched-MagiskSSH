@@ -114,8 +114,9 @@ jobs:
           ANDROID_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           mkdir -p build
-          make -f all_arches.mk \
-            BUILD_DIR="$(pwd)/build" \
+          cd build
+          # all_arches.mk 期望在 build/ 子目录下执行（内部通过 ../ 引用源码根）
+          make -f ../all_arches.mk \
             ANDROID_ROOT="$ANDROID_ROOT" \
             -j$(nproc) zip
 
