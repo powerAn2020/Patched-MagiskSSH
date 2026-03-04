@@ -1,125 +1,70 @@
-name: Build MagiskSSH Module
+name: Build Magisk SSH
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: ["master", "main"]
   pull_request:
-    branches:
-      - main
-      - master
+    branches: ["master", "main"]
   workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Build type'
-        required: true
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - arm64
-          - x86_64
-
-env:
-  ANDROID_NDK_VERSION: r25c
-  ANDROID_NDK_PATH: /opt/android-ndk
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: all
-            artifact_name: MagiskSSH-all
-            build_condition: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.build_type == 'all' }}
-          - arch: arm64
-            artifact_name: MagiskSSH-arm64
-            build_condition: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'arm64' }}
-          - arch: x86_64
-            artifact_name: MagiskSSH-x86_64
-            build_condition: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'x86_64' }}
-
-    if: ${{ matrix.build_condition }}
 
     steps:
-      - name: Checkout GitLab repository
-        run: |
-          git clone https://gitlab.com/d4rcm4rc/MagiskSSH.git magisk-ssh
-          cd magisk-ssh
-          echo "REPO_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      - name: Checkout Source
+        uses: actions/checkout@v4
 
-      - name: Replace SSH data directory path
-        run: |
-          cd magisk-ssh
-          echo "Replacing /data/ssh with /data/adb/ssh in all files..."
-          find . -type f \( -name "*.mk" -o -name "*.sh" -o -name "*.c" -o -name "*.h" -o -name "*.conf" -o -name "*.txt" -o -name "*.md" -o -name "Makefile" -o -name "*.in" -o -name "module.prop" \) -exec sed -i 's|/data/ssh|/data/adb/ssh|g' {} +
-          echo "Replacement complete."
-          echo "Modified files:"
-          grep -r "/data/adb/ssh" . --include="*.mk" --include="*.sh" --include="*.c" --include="*.h" --include="*.conf" --include="Makefile" --include="*.in" -l || true
+      - name: Setup Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25c
+          add-to-path: false
 
-      - name: Install build dependencies
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Build Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             make \
             wget \
             p7zip-full \
-            zip \
-            python3 \
-            build-essential \
+            perl \
             autoconf \
-            automake \
-            libtool
+            patch
 
-      - name: Setup Android NDK
+      # patches/*.patch 和各 .sh 在 Make 下载/展开源码前修改，时序正确
+      - name: Patch Paths (/data/ssh/ -> /data/adb/ssh/)
         run: |
-          echo "Downloading Android NDK ${ANDROID_NDK_VERSION}..."
-          wget -q https://dl.google.com/android/repository/android-ndk-${ANDROID_NDK_VERSION}-linux.zip
-          unzip -q android-ndk-${ANDROID_NDK_VERSION}-linux.zip
-          mv android-ndk-${ANDROID_NDK_VERSION} ${ANDROID_NDK_PATH}
-          rm android-ndk-${ANDROID_NDK_VERSION}-linux.zip
-          echo "ANDROID_ROOT=${ANDROID_NDK_PATH}" >> $GITHUB_ENV
+          sed -i 's|/data/ssh/|/data/adb/ssh/|g' patches/*.patch
+          sed -i 's|/data/ssh/|/data/adb/ssh/|g' module_data/install.sh
+          sed -i 's|/data/ssh/|/data/adb/ssh/|g' module_data/uninstall.sh
+          sed -i 's|/data/ssh/|/data/adb/ssh/|g' module_data/common/service.sh
 
-      - name: Build MagiskSSH module (${{ matrix.arch }})
+      # 同时替换 openssh.mk 中 configure 阶段写死的 --sysconfdir 和 --with-pid-dir
+      - name: Patch openssh.mk Configure Flags
         run: |
-          cd magisk-ssh
+          sed -i 's|--sysconfdir=/data/ssh|--sysconfdir=/data/adb/ssh|g' openssh.mk
+          sed -i 's|--with-pid-dir=/data/ssh|--with-pid-dir=/data/adb/ssh|g' openssh.mk
+
+      - name: Build Module
+        env:
+          ANDROID_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
           mkdir -p build
-          cd build
-          export ANDROID_ROOT=${ANDROID_NDK_PATH}
-          if [ "${{ matrix.arch }}" = "all" ]; then
-            make -f ../all_arches.mk -j$(nproc) zip
-          else
-            make -f ../Makefile ARCH=${{ matrix.arch }} -j$(nproc) zip || make -f ../all_arches.mk -j$(nproc) zip
-          fi
+          # BUILD_DIR 必须是绝对路径传给 make，避免 realpath 失败
+          make -f all_arches.mk \
+            BUILD_DIR="$(pwd)/build" \
+            ANDROID_ROOT="$ANDROID_ROOT" \
+            -j$(nproc) zip
 
-      - name: Find built module
-        id: find_module
-        run: |
-          cd magisk-ssh/build
-          MODULE_FILE=$(find . -name "*.zip" -type f | head -n 1)
-          if [ -n "$MODULE_FILE" ]; then
-            echo "module_name=$(basename $MODULE_FILE)" >> $GITHUB_OUTPUT
-            echo "Found module: $MODULE_FILE"
-          else
-            echo "No module zip file found!"
-            exit 1
-          fi
-
-      - name: Upload artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}-${{ env.REPO_COMMIT }}
-          path: magisk-ssh/build/${{ steps.find_module.outputs.module_name }}
-          retention-days: ${{ matrix.arch == 'all' && 30 || 7 }}
-
-      - name: Create release on tag
-        if: ${{ startsWith(github.ref, 'refs/tags/') && matrix.arch == 'all' }}
-        uses: softprops/action-gh-release@v1
-        with:
-          files: magisk-ssh/build/${{ steps.find_module.outputs.module_name }}
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: magisk_ssh_v0.26.zip
+          path: build/magisk_ssh_v*.zip
