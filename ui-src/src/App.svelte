@@ -5,8 +5,11 @@
   import LogViewer from "./lib/LogViewer.svelte";
   import { _, isLoading, locale } from "svelte-i18n";
 
+  // Normalize locale to 'zh'/'en' — navigator may return 'zh-CN', 'zh-TW', etc.
+  let isZh = $derived(($locale ?? "").startsWith("zh"));
+
   function toggleLanguage() {
-    $locale = $locale === "en" ? "zh" : "en";
+    locale.set(isZh ? "en" : "zh");
   }
 </script>
 
@@ -55,7 +58,7 @@
           onclick={toggleLanguage}
           class="px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md transition-colors"
         >
-          {$locale === "zh" ? "English" : "中文"}
+          {isZh ? "English" : "中文"}
         </button>
       </div>
     </header>

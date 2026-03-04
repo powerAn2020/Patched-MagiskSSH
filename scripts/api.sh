@@ -34,8 +34,14 @@ PID_FILE="${SSHDIR}/sshd.pid"
 # MagiskSSH has two users: root and shell, each with their own authorized_keys
 AUTH_KEYS_ROOT="${SSHDIR}/root/.ssh/authorized_keys"
 AUTH_KEYS_SHELL="${SSHDIR}/shell/.ssh/authorized_keys"
-# Default to root's authorized_keys for WebUI management
-AUTHORIZED_KEYS="${AUTH_KEYS_ROOT}"
+
+# Resolve keys file based on optional user arg (default: root)
+get_keys_file() {
+  case "${1:-root}" in
+    shell) echo "$AUTH_KEYS_SHELL" ;;
+    *)     echo "$AUTH_KEYS_ROOT"  ;;
+  esac
+}
 
 # sshd does not write a log file by default; we redirect via -E flag when
 # starting through the WebUI. On stock MagiskSSH (opensshd.init) there is
@@ -80,8 +86,8 @@ get_pid() {
 ensure_dirs() {
   mkdir -p "${SSHDIR}/root/.ssh" 2>/dev/null
   mkdir -p "${SSHDIR}/shell/.ssh" 2>/dev/null
-  touch "$AUTHORIZED_KEYS" 2>/dev/null
-  chmod 600 "$AUTHORIZED_KEYS" 2>/dev/null
+  touch "$AUTH_KEYS_ROOT" "$AUTH_KEYS_SHELL" 2>/dev/null
+  chmod 600 "$AUTH_KEYS_ROOT" "$AUTH_KEYS_SHELL" 2>/dev/null
 }
 
 # --- Actions -----------------------------------------------------------------
@@ -179,38 +185,48 @@ do_write_config() {
 }
 
 do_read_keys() {
+  local target
+  target=$(get_keys_file "$1")
   ensure_dirs
-  if [ -f "$AUTHORIZED_KEYS" ]; then
-    cat "$AUTHORIZED_KEYS"
+  if [ -f "$target" ]; then
+    cat "$target"
   else
     echo ""
   fi
 }
 
 do_write_keys() {
+  local target
+  target=$(get_keys_file "$1")
   ensure_dirs
-  local content
-  content=$(cat)
-  printf '%s\n' "$content" > "$AUTHORIZED_KEYS"
-  chmod 600 "$AUTHORIZED_KEYS"
+  local b64
+  b64=$(cat)
+  printf '%s' "$b64" | base64 -d > "$target"
+  chmod 600 "$target"
   json_ok "Keys saved"
 }
 
 do_add_key() {
+  local target
+  target=$(get_keys_file "$1")
   ensure_dirs
-  local key
-  key=$(cat)
+  local b64 key
+  b64=$(cat)
+  key=$(printf '%s' "$b64" | base64 -d)
   if [ -z "$key" ]; then
     json_err "Empty key"
     return 1
   fi
-  printf '%s\n' "$key" >> "$AUTHORIZED_KEYS"
-  chmod 600 "$AUTHORIZED_KEYS"
+  printf '%s\n' "$key" >> "$target"
+  chmod 600 "$target"
   json_ok "Key added"
 }
 
 do_delete_key() {
   local line_num="$1"
+  local user="$2"
+  local target
+  target=$(get_keys_file "$user")
   if [ -z "$line_num" ]; then
     json_err "Line number required"
     return 1
@@ -219,7 +235,7 @@ do_delete_key() {
     ''|*[!0-9]*) json_err "Invalid line number: ${line_num}"; return 1 ;;
   esac
   ensure_dirs
-  sed -i "${line_num}d" "$AUTHORIZED_KEYS"
+  sed -i "${line_num}d" "$target"
   json_ok "Key at line ${line_num} deleted"
 }
 
@@ -251,10 +267,10 @@ case "$ACTION" in
   restart)      do_restart ;;
   read_config)  do_read_config ;;
   write_config) do_write_config ;;
-  read_keys)    do_read_keys ;;
-  write_keys)   do_write_keys ;;
-  add_key)      do_add_key ;;
-  delete_key)   do_delete_key "$1" ;;
+  read_keys)    do_read_keys  "$1" ;;
+  write_keys)   do_write_keys "$1" ;;
+  add_key)      do_add_key    "$1" ;;
+  delete_key)   do_delete_key "$1" "$2" ;;
   tail_log)     do_tail_log ;;
   read_log)     do_read_log ;;
   *)

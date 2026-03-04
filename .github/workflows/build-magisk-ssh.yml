@@ -94,6 +94,11 @@ jobs:
           grep -rl "/data/adb/ssh" . --include="*.sh" --include="*.conf" --include="*.patch" \
             --include="opensshd.init" 2>/dev/null || true
 
+      # opensshd.init 默认启动时没有日志输出，补丁添加 -E 日志重定向
+      - name: Patch opensshd.init to enable logging
+        working-directory: magisk-ssh
+        run: python3 $GITHUB_WORKSPACE/tools/patch_init.py
+
       # configure flags 在 .mk 里的 --sysconfdir / --with-pid-dir，精确替换这两个 flag
       - name: Patch configure flags (/data/ssh -> /data/adb/ssh)
         working-directory: magisk-ssh
@@ -134,15 +139,30 @@ jobs:
             echo "::error::No module zip found after build!"
             exit 1
           fi
-          echo "Injecting WebUI into $MODULE_ZIP..."
+          echo "Injecting WebUI and scripts into $MODULE_ZIP..."
           INJECT_DIR=$(mktemp -d)
           mkdir -p "$INJECT_DIR/webroot" "$INJECT_DIR/scripts"
+
+          # WebUI build output → module root webroot/
           cp -r "$GITHUB_WORKSPACE/webroot-dist/"* "$INJECT_DIR/webroot/"
-          cp "$GITHUB_WORKSPACE/scripts/api.sh" "$INJECT_DIR/scripts/"
-          chmod 755 "$INJECT_DIR/scripts/api.sh"
-          (cd "$INJECT_DIR" && zip -r "$GITHUB_WORKSPACE/magisk-ssh/build/$MODULE_ZIP" webroot/ scripts/)
+
+          # action.sh → module ROOT (KernelSU hardcodes $MODPATH/action.sh)
+          cp "$GITHUB_WORKSPACE/scripts/action.sh" "$INJECT_DIR/action.sh"
+          chmod 755 "$INJECT_DIR/action.sh"
+
+          # api.sh and other scripts → scripts/ subdir (called by WebUI via api.sh)
+          for f in "$GITHUB_WORKSPACE/scripts/"*.sh; do
+            [ "$(basename "$f")" = "action.sh" ] && continue
+            cp "$f" "$INJECT_DIR/scripts/"
+            chmod 755 "$INJECT_DIR/scripts/$(basename "$f")"
+          done
+
+          (cd "$INJECT_DIR" && zip -r "$GITHUB_WORKSPACE/magisk-ssh/build/$MODULE_ZIP" action.sh webroot/ scripts/)
           rm -rf "$INJECT_DIR"
-          echo "Injection complete."
+          echo "Injection complete:"
+          echo "  action.sh        → module root"
+          echo "  webroot/         → $(find "$GITHUB_WORKSPACE/webroot-dist" -type f | wc -l) files"
+          echo "  scripts/         → $(ls "$GITHUB_WORKSPACE/scripts/"*.sh | grep -v action.sh | wc -l) scripts"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
