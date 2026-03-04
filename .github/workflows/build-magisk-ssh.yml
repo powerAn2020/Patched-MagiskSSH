@@ -36,7 +36,7 @@ jobs:
           path: webroot/
           retention-days: 1
 
-  build:
+  build-MagiskSSH:
     runs-on: ubuntu-latest
     needs: build-webui
 
@@ -139,12 +139,16 @@ jobs:
             echo "::error::No module zip found after build!"
             exit 1
           fi
-          echo "Injecting WebUI and scripts into $MODULE_ZIP..."
+          echo "Injecting WebUI, scripts and customize.sh into $MODULE_ZIP..."
           INJECT_DIR=$(mktemp -d)
           mkdir -p "$INJECT_DIR/webroot" "$INJECT_DIR/scripts"
 
           # WebUI build output → module root webroot/
           cp -r "$GITHUB_WORKSPACE/webroot-dist/"* "$INJECT_DIR/webroot/"
+
+          # customize.sh → module root (replaces legacy install.sh)
+          cp "$GITHUB_WORKSPACE/customize.sh" "$INJECT_DIR/customize.sh"
+          chmod 755 "$INJECT_DIR/customize.sh"
 
           # action.sh → module ROOT (KernelSU hardcodes $MODPATH/action.sh)
           cp "$GITHUB_WORKSPACE/scripts/action.sh" "$INJECT_DIR/action.sh"
@@ -157,9 +161,19 @@ jobs:
             chmod 755 "$INJECT_DIR/scripts/$(basename "$f")"
           done
 
-          (cd "$INJECT_DIR" && zip -r "$GITHUB_WORKSPACE/magisk-ssh/build/$MODULE_ZIP" action.sh webroot/ scripts/)
+          # Inject new files into zip
+          ABS_ZIP="$GITHUB_WORKSPACE/magisk-ssh/build/$MODULE_ZIP"
+          (cd "$INJECT_DIR" && zip -r "$ABS_ZIP" customize.sh action.sh webroot/ scripts/)
+
+          # Remove legacy install.sh if present (customize.sh is the replacement)
+          if unzip -l "$ABS_ZIP" install.sh >/dev/null 2>&1; then
+            zip -d "$ABS_ZIP" install.sh
+            echo "  Removed legacy install.sh from zip"
+          fi
+
           rm -rf "$INJECT_DIR"
           echo "Injection complete:"
+          echo "  customize.sh     → module root (replaces install.sh)"
           echo "  action.sh        → module root"
           echo "  webroot/         → $(find "$GITHUB_WORKSPACE/webroot-dist" -type f | wc -l) files"
           echo "  scripts/         → $(ls "$GITHUB_WORKSPACE/scripts/"*.sh | grep -v action.sh | wc -l) scripts"
