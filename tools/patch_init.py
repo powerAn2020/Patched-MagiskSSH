@@ -11,7 +11,7 @@ import re
 import sys
 
 LOG_FILE = "/data/adb/ssh/sshd.log"
-CANDIDATES = ["common/opensshd.init", "opensshd.init"]
+CANDIDATES = ["module_data/common/opensshd.init"]
 
 patched_any = False
 for path in CANDIDATES:
