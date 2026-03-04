@@ -152,11 +152,14 @@ jobs:
 
           # action.sh → module ROOT (KernelSU hardcodes $MODPATH/action.sh)
           cp "$GITHUB_WORKSPACE/scripts/action.sh" "$INJECT_DIR/action.sh"
+          cp "$GITHUB_WORKSPACE/scripts/customize.sh" "$INJECT_DIR/customize.sh"
           chmod 755 "$INJECT_DIR/action.sh"
+          chmod 755 "$INJECT_DIR/customize.sh"
 
           # api.sh and other scripts → scripts/ subdir (called by WebUI via api.sh)
           for f in "$GITHUB_WORKSPACE/scripts/"*.sh; do
             [ "$(basename "$f")" = "action.sh" ] && continue
+            [ "$(basename "$f")" = "customize.sh" ] && continue
             cp "$f" "$INJECT_DIR/scripts/"
             chmod 755 "$INJECT_DIR/scripts/$(basename "$f")"
           done
