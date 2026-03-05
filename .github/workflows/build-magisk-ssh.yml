@@ -94,8 +94,8 @@ jobs:
           grep -rl "/data/adb/ssh" . --include="*.sh" --include="*.conf" --include="*.patch" \
             --include="opensshd.init" 2>/dev/null || true
 
-      # opensshd.init 默认启动时没有日志输出，补丁添加 -E 日志重定向
-      - name: Patch opensshd.init to enable logging
+      # opensshd.init 默认缺省配置文件且没有日志输出，补丁添加 -f 配置文件和 -E 日志重定向
+      - name: Patch opensshd.init to use explicit config and enable logging
         working-directory: magisk-ssh
         run: python3 $GITHUB_WORKSPACE/tools/patch_init.py
 

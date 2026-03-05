@@ -39,6 +39,7 @@ unzip -o "$ZIPFILE" -d "$EXTRACT_TMP" >/dev/null 2>&1
 # ── Step 4: Move arch-independent files ──────────────────────────────
 mv "$EXTRACT_TMP/common/opensshd.init" "$MODPATH/opensshd.init"
 mv "$EXTRACT_TMP/common/wrapper"       "$MODPATH/system/usr/libexec/ssh-core/wrapper"
+mv "$EXTRACT_TMP/common/service.sh" "$MODPATH/service.sh"
 
 # ── Step 5: Move arch-specific binaries ──────────────────────────────
 ui_print "- Installing binaries for arch: $ARCH"
@@ -58,6 +59,7 @@ if [ ! -f /data/adb/ssh/sshd_config ]; then
   ui_print "- Installing default sshd_config"
   mv "$EXTRACT_TMP/common/sshd_config" /data/adb/ssh/sshd_config
 fi
+
 rm -rf $EXTRACT_TMP/common $EXTRACT_TMP/META-INF
 mv $EXTRACT_TMP/* "$MODPATH/"
 # ── Cleanup temp dir ──────────────────────────────────────────────────

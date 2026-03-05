@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Patch opensshd.init to redirect sshd logs to a file.
+Patch opensshd.init to use explicit config and redirect sshd logs to a file.
 
-Original: $SSHD  (no log output)
-Patched:  $SSHD -E /data/adb/ssh/sshd.log
+Original: $SSHD  (no log output, no config)
+Patched:  $SSHD -f /data/adb/ssh/sshd_config -E /data/adb/ssh/sshd.log
           + mkdir -p /data/adb/ssh at start of start_service()
 
 The script walks the current directory tree to find opensshd.init,
@@ -14,6 +14,7 @@ import re
 import sys
 
 LOG_FILE = "/data/adb/ssh/sshd.log"
+CONFIG_FILE = "/data/adb/ssh/sshd_config"
 
 
 def find_opensshd_init(root="."):
@@ -29,10 +30,10 @@ def patch_file(path):
     text = open(path).read()
     original = text
 
-    # 1. Add -E LOG_FILE to bare $SSHD invocations (skip already patched lines)
+    # 1. Add -f CONFIG_FILE and -E LOG_FILE to bare $SSHD invocations (skip already patched lines)
     text = re.sub(
-        r"(\$SSHD)(?!\s+-E)(\s*$)",
-        r"\1 -E " + LOG_FILE + r"\2",
+        r"(\$SSHD)(?!\s+-f)(?!\s+-E)(\s*$)",
+        r"\1 -f " + CONFIG_FILE + " -E " + LOG_FILE + r"\2",
         text,
         flags=re.MULTILINE,
     )
