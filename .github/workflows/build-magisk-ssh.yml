@@ -94,11 +94,6 @@ jobs:
           grep -rl "/data/adb/ssh" . --include="*.sh" --include="*.conf" --include="*.patch" \
             --include="opensshd.init" 2>/dev/null || true
 
-      # opensshd.init 默认缺省配置文件且没有日志输出，补丁添加 -f 配置文件和 -E 日志重定向
-      - name: Patch opensshd.init to use explicit config and enable logging
-        working-directory: magisk-ssh
-        run: python3 $GITHUB_WORKSPACE/tools/patch_init.py
-
       # configure flags 在 .mk 里的 --sysconfdir / --with-pid-dir，精确替换这两个 flag
       - name: Patch configure flags (/data/ssh -> /data/adb/ssh)
         working-directory: magisk-ssh
@@ -170,8 +165,13 @@ jobs:
             echo "updateJson=${UPDATE_JSON_URL}" >> "$INJECT_DIR/module.prop"
           fi
 
+          # Extract, patch, and re-inject opensshd.init
+          mkdir -p "$INJECT_DIR/common"
+          unzip -p "$ABS_ZIP" common/opensshd.init > "$INJECT_DIR/common/opensshd.init"
+          (cd "$INJECT_DIR" && python3 "$GITHUB_WORKSPACE/tools/patch_init.py")
+          
           # Inject new files into zip
-          (cd "$INJECT_DIR" && zip -r "$ABS_ZIP" module.prop customize.sh action.sh webroot/ scripts/)
+          (cd "$INJECT_DIR" && zip -r "$ABS_ZIP" module.prop common/opensshd.init customize.sh action.sh webroot/ scripts/)
 
           # Remove legacy install.sh if present (customize.sh is the replacement)
           if unzip -l "$ABS_ZIP" install.sh >/dev/null 2>&1; then
