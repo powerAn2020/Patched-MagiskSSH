@@ -159,9 +159,19 @@ jobs:
             chmod 755 "$INJECT_DIR/scripts/$(basename "$f")"
           done
 
-          # Inject new files into zip
           ABS_ZIP="$GITHUB_WORKSPACE/magisk-ssh/build/$MODULE_ZIP"
-          (cd "$INJECT_DIR" && zip -r "$ABS_ZIP" customize.sh action.sh webroot/ scripts/)
+
+          # Extract and modify module.prop
+          unzip -p "$ABS_ZIP" module.prop > "$INJECT_DIR/module.prop"
+          UPDATE_JSON_URL="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/update.json"
+          if grep -q "^updateJson=" "$INJECT_DIR/module.prop"; then
+            sed -i "s|^updateJson=.*|updateJson=${UPDATE_JSON_URL}|" "$INJECT_DIR/module.prop"
+          else
+            echo "updateJson=${UPDATE_JSON_URL}" >> "$INJECT_DIR/module.prop"
+          fi
+
+          # Inject new files into zip
+          (cd "$INJECT_DIR" && zip -r "$ABS_ZIP" module.prop customize.sh action.sh webroot/ scripts/)
 
           # Remove legacy install.sh if present (customize.sh is the replacement)
           if unzip -l "$ABS_ZIP" install.sh >/dev/null 2>&1; then

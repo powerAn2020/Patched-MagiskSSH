@@ -2,7 +2,7 @@
     import { onMount } from "svelte";
     import { api, apiWithStdin } from "./ksu";
     import { _ } from "svelte-i18n";
-    import { Trash2, KeyRound, User, Users } from "lucide-svelte";
+    import { Trash2, KeyRound, User, Users, Copy, Check } from "lucide-svelte";
 
     type User = "root" | "shell";
 
@@ -11,6 +11,7 @@
     let newKey = $state("");
     let isAdding = $state(false);
     let isLoading = $state(false);
+    let copiedIndex = $state<number | null>(null);
 
     const users: { id: User; label: string }[] = [
         { id: "root", label: "root" },
@@ -65,6 +66,28 @@
         );
     }
 
+    async function copyKey(key: string, index: number) {
+        try {
+            await navigator.clipboard.writeText(key);
+            copiedIndex = index;
+            setTimeout(() => {
+                if (copiedIndex === index) copiedIndex = null;
+            }, 2000);
+        } catch (e) {
+            console.error("Failed to copy", e);
+        }
+    }
+
+    function parseKey(key: string) {
+        const parts = key.trim().split(/\s+/);
+        if (parts.length >= 3) {
+            return { type: parts[0], comment: parts.slice(2).join(" ") };
+        } else if (parts.length === 2) {
+            return { type: parts[0], comment: "..." + parts[1].slice(-12) };
+        }
+        return { type: "Unknown", comment: "..." };
+    }
+
     onMount(() => loadKeys("root"));
 </script>
 
@@ -109,24 +132,58 @@
             </p>
         {:else}
             {#each keys as key, index}
+                {@const parsed = parseKey(key)}
                 <div
-                    class="group flex items-center justify-between gap-4 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-lg transition-all hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm"
+                    class="group flex items-center justify-between gap-2 sm:gap-4 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-lg transition-all hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm"
                 >
-                    <div class="flex-1 min-w-0">
-                        <p
-                            class="text-sm font-mono truncate text-slate-600 dark:text-slate-400"
-                            title={key}
-                        >
-                            {key}
-                        </p>
-                    </div>
                     <button
-                        onclick={() => deleteKey(index)}
-                        class="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-md transition-colors"
-                        title={$_("app.auth.btn_delete")}
+                        class="flex-1 min-w-0 text-left focus:outline-none flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 group/btn"
+                        title={key}
+                        onclick={() => copyKey(key, index)}
                     >
-                        <Trash2 class="w-4 h-4" />
+                        <span
+                            class="text-xs font-semibold px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md whitespace-nowrap w-fit"
+                        >
+                            {parsed.type}
+                        </span>
+                        <div class="flex items-center gap-2 min-w-0 flex-1">
+                            <span
+                                class="text-sm font-mono truncate text-slate-600 dark:text-slate-400 group-hover/btn:text-indigo-600 dark:group-hover/btn:text-indigo-400 transition-colors"
+                            >
+                                {parsed.comment}
+                            </span>
+                            {#if copiedIndex === index}
+                                <span
+                                    class="text-xs text-emerald-500 animate-in fade-in duration-200 whitespace-nowrap"
+                                >
+                                    已复制！
+                                </span>
+                            {/if}
+                        </div>
                     </button>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button
+                            onclick={() => copyKey(key, index)}
+                            class="p-2 transition-colors rounded-md {copiedIndex ===
+                            index
+                                ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10'
+                                : 'text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}"
+                            title="复制"
+                        >
+                            {#if copiedIndex === index}
+                                <Check class="w-4 h-4" />
+                            {:else}
+                                <Copy class="w-4 h-4" />
+                            {/if}
+                        </button>
+                        <button
+                            onclick={() => deleteKey(index)}
+                            class="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-md transition-colors"
+                            title={$_("app.auth.btn_delete")}
+                        >
+                            <Trash2 class="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             {/each}
         {/if}
