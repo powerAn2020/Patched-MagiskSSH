@@ -8,6 +8,7 @@
     let isRunning = $state(false);
     let pid = $state("");
     let port = $state("");
+    let ip = $state("");
     let isToggling = $state(false);
 
     async function checkStatus() {
@@ -42,7 +43,14 @@
         await checkStatus();
     }
 
-    onMount(checkStatus);
+    onMount(() => {
+        checkStatus();
+        api("get_ip")
+            .then((res) => {
+                ip = res.stdout.trim();
+            })
+            .catch(() => {});
+    });
 </script>
 
 <div
@@ -88,12 +96,17 @@
             </button>
         </div>
 
-        <!-- 第二行：PID / Port 附加信息 -->
-        {#if isRunning && pid}
-            <div class="pl-6">
-                <span class="text-xs text-slate-400"
-                    >PID: {pid} · Port: {port}</span
-                >
+        <!-- 第二行：IP / PID / Port 附加信息 -->
+        {#if ip || (isRunning && pid)}
+            <div class="pl-6 flex flex-col gap-0.5">
+                {#if ip}
+                    <span class="text-xs text-slate-400">IP: {ip}</span>
+                {/if}
+                {#if isRunning && pid}
+                    <span class="text-xs text-slate-400"
+                        >PID: {pid} · Port: {port}</span
+                    >
+                {/if}
             </div>
         {/if}
     </div>

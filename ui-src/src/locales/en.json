@@ -13,7 +13,7 @@
         "config": {
             "title": "sshd_config",
             "editor_placeholder": "Loading...",
-            "btn_save": "Save Configuration",
+            "btn_save": "Save",
             "btn_saving": "Saving..."
         },
         "logs": {

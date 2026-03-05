@@ -1,1 +1,4 @@
 @import "tailwindcss";
+
+/* Tailwind v4: dark: \u7531 html.dark \u63a7\u5236\uff08\u800c\u975e\u7cfb\u7edf\u5a92\u4f53\u67e5\u8be2\uff09 */
+@variant dark (&:where(.dark, .dark *));

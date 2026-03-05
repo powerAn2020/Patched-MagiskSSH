@@ -16,6 +16,7 @@
 #   write_keys    - Write stdin to authorized_keys
 #   add_key       - Append a key from stdin to authorized_keys
 #   delete_key    - Delete key at line number ($2)
+#   get_ip        - Get device local IP address
 #   tail_log      - Tail -f the ssh log (for spawn, streaming)
 #   read_log      - Read ssh log snapshot (for exec, one-shot)
 #   read_log_from - Read log lines from offset $2 onwards, prints "<total>\n<lines>"
@@ -104,6 +105,27 @@ do_status() {
   else
     printf '{"running":false,"pid":"","port":""}\n'
   fi
+}
+
+do_get_ip() {
+  # 按优先级尝试常见接口，取第一个有效 IPv4
+  local ip
+  for iface in wlan0 wlan1 eth0 eth1 rmnet_data0 rmnet0; do
+    ip=$(ip addr show "$iface" 2>/dev/null \
+         | grep 'inet ' \
+         | awk '{print $2}' \
+         | cut -d'/' -f1 \
+         | head -1)
+    [ -n "$ip" ] && echo "$ip" && return 0
+  done
+  # fallback: 取所有非 127.x 的 inet 地址里的第一个
+  ip=$(ip addr 2>/dev/null \
+       | grep 'inet ' \
+       | grep -v '127\.0\.0' \
+       | awk '{print $2}' \
+       | cut -d'/' -f1 \
+       | head -1)
+  echo "${ip:-unknown}"
 }
 
 do_start() {
@@ -289,16 +311,17 @@ ACTION="$1"
 shift
 
 case "$ACTION" in
-  status)       do_status ;;
-  start)        do_start ;;
-  stop)         do_stop ;;
-  restart)      do_restart ;;
-  read_config)  do_read_config ;;
-  write_config) do_write_config ;;
-  read_keys)    do_read_keys  "$1" ;;
-  write_keys)   do_write_keys "$1" ;;
-  add_key)      do_add_key    "$1" ;;
-  delete_key)   do_delete_key "$1" "$2" ;;
+  status)        do_status ;;
+  start)         do_start ;;
+  stop)          do_stop ;;
+  restart)       do_restart ;;
+  read_config)   do_read_config ;;
+  write_config)  do_write_config ;;
+  read_keys)     do_read_keys  "$1" ;;
+  write_keys)    do_write_keys "$1" ;;
+  add_key)       do_add_key    "$1" ;;
+  delete_key)    do_delete_key "$1" "$2" ;;
+  get_ip)        do_get_ip ;;
   tail_log)      do_tail_log ;;
   read_log)      do_read_log ;;
   read_log_from) do_read_log_from "$1" ;;

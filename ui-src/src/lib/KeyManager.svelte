@@ -122,7 +122,7 @@
                     </div>
                     <button
                         onclick={() => deleteKey(index)}
-                        class="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-md transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        class="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-md transition-colors"
                         title={$_("app.auth.btn_delete")}
                     >
                         <Trash2 class="w-4 h-4" />

@@ -5,12 +5,32 @@
   import LogViewer from "./lib/LogViewer.svelte";
   import { _, isLoading, locale } from "svelte-i18n";
   import { debugEnabled, toggleDebug } from "./lib/ksu";
+  import { Moon, Sun } from "lucide-svelte";
 
   // Normalize locale to 'zh'/'en' — navigator may return 'zh-CN', 'zh-TW', etc.
   let isZh = $derived(($locale ?? "").startsWith("zh"));
 
   function toggleLanguage() {
     locale.set(isZh ? "en" : "zh");
+  }
+
+  // --- Dark mode ---
+  // 初始化：localstorage > 系统偏好
+  const stored = localStorage.getItem("theme");
+  let isDark = $state(
+    stored
+      ? stored === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches,
+  );
+
+  // 实时应用 dark 类到 html
+  $effect(() => {
+    document.documentElement.classList.toggle("dark", isDark);
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+  });
+
+  function toggleDark() {
+    isDark = !isDark;
   }
 </script>
 
@@ -76,6 +96,25 @@
               : isZh
                 ? "调试"
                 : "Debug"}
+          </button>
+
+          <!-- 夜间模式切换 -->
+          <button
+            onclick={toggleDark}
+            title={isDark
+              ? isZh
+                ? "切换为亮色模式"
+                : "Light mode"
+              : isZh
+                ? "切换为深色模式"
+                : "Dark mode"}
+            class="w-8 h-8 flex items-center justify-center rounded-md transition-colors bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+          >
+            {#if isDark}
+              <Sun class="w-4 h-4" />
+            {:else}
+              <Moon class="w-4 h-4" />
+            {/if}
           </button>
 
           <button
