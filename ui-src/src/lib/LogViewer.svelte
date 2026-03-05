@@ -1,40 +1,64 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
-    import { spawnLogTail } from "./ksu";
+    import { api } from "./ksu";
     import { _ } from "svelte-i18n";
     import { Terminal } from "lucide-svelte";
 
+    const POLL_INTERVAL_MS = 3000;
+    const MAX_LINES = 200;
+
     let logs: string[] = $state([]);
     let logsContainer: HTMLElement;
-    let killSpawn: (() => void) | null = null;
     let autoScroll = $state(true);
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let nextLine = 1; // 下次从第几行开始读（1-based）
 
-    function startTail() {
-        killSpawn = spawnLogTail(
-            (chunk) => {
-                logs = [...logs, ...chunk.split("\n").filter(Boolean)];
-                if (logs.length > 200) {
-                    logs = logs.slice(-200);
-                }
-                if (autoScroll && logsContainer) {
-                    requestAnimationFrame(() => {
-                        logsContainer.scrollTop = logsContainer.scrollHeight;
-                    });
-                }
-            },
-            (err) => console.error("Log error:", err),
-            (code) => console.log(`Tail exited with code ${code}`),
-        );
+    function appendLines(newLines: string[]) {
+        if (newLines.length === 0) return;
+        logs = [...logs, ...newLines].slice(-MAX_LINES);
+        if (autoScroll && logsContainer) {
+            requestAnimationFrame(() => {
+                logsContainer.scrollTop = logsContainer.scrollHeight;
+            });
+        }
+    }
+
+    async function poll() {
+        try {
+            const res = await api("read_log_from", String(nextLine));
+            const lines = res.stdout.split("\n");
+            if (lines.length === 0) return;
+
+            const total = parseInt(lines[0], 10);
+            if (isNaN(total)) return;
+
+            // 文件被清空（clear_log 后 total 归 0），重置偏移
+            if (total === 0 || total < nextLine - 1) {
+                nextLine = 1;
+                return;
+            }
+
+            const newLines = lines.slice(1).filter(Boolean);
+            nextLine = total + 1;
+            appendLines(newLines);
+        } catch {
+            // 静默忽略，等下次轮询
+        }
     }
 
     function clearLogs() {
         logs = [];
+        nextLine = 1;
+        api("clear_log");
     }
 
-    onMount(startTail);
+    onMount(() => {
+        poll();
+        timer = setInterval(poll, POLL_INTERVAL_MS);
+    });
 
     onDestroy(() => {
-        if (killSpawn) killSpawn();
+        if (timer !== null) clearInterval(timer);
     });
 
     function handleScroll() {

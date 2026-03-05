@@ -4,6 +4,7 @@
   import KeyManager from "./lib/KeyManager.svelte";
   import LogViewer from "./lib/LogViewer.svelte";
   import { _, isLoading, locale } from "svelte-i18n";
+  import { debugEnabled, toggleDebug } from "./lib/ksu";
 
   // Normalize locale to 'zh'/'en' — navigator may return 'zh-CN', 'zh-TW', etc.
   let isZh = $derived(($locale ?? "").startsWith("zh"));
@@ -54,12 +55,36 @@
           </h1>
         </div>
 
-        <button
-          onclick={toggleLanguage}
-          class="px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md transition-colors"
-        >
-          {isZh ? "English" : "中文"}
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            onclick={toggleDebug}
+            title={$debugEnabled
+              ? isZh
+                ? "关闭调试模式"
+                : "Disable debug"
+              : isZh
+                ? "开启调试模式"
+                : "Enable debug"}
+            class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors {$debugEnabled
+              ? 'bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-500/20 dark:text-orange-300 dark:hover:bg-orange-500/30'
+              : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400'}"
+          >
+            🐛 {$debugEnabled
+              ? isZh
+                ? "调试"
+                : "Debug"
+              : isZh
+                ? "调试"
+                : "Debug"}
+          </button>
+
+          <button
+            onclick={toggleLanguage}
+            class="px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md transition-colors"
+          >
+            {isZh ? "En" : "中"}
+          </button>
+        </div>
       </div>
     </header>
 

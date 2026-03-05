@@ -1,6 +1,6 @@
 {
     "app": {
-        "title": "MagiskSSH 管理器",
+        "title": "MagiskSSH",
         "status": {
             "title": "服务状态",
             "checking": "检查中...",

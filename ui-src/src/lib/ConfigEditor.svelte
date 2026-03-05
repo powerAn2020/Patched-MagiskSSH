@@ -59,8 +59,9 @@
     {:else}
         <textarea
             bind:value={configContent}
-            class="w-full h-64 p-4 font-mono text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"
+            class="w-full h-64 p-4 font-mono text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y overflow-x-auto"
             spellcheck="false"
+            wrap="off"
         ></textarea>
     {/if}
 </div>

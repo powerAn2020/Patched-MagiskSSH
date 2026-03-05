@@ -2,6 +2,31 @@ import * as kernelsu from 'kernelsu';
 
 const isMock = import.meta.env.DEV;
 
+// --- Debug mode --------------------------------------------------------------
+// 默认关闭，刷新页面后重置，不做持久化；通过首页开关手动开启
+import { writable } from 'svelte/store';
+
+export const debugEnabled = writable(false);
+
+export function toggleDebug(): void {
+    debugEnabled.update((v) => {
+        const next = !v;
+        console.trace(`[KSU] Debug mode → ${next ? 'ON' : 'OFF'}`);
+        return next;
+    });
+}
+
+let _isDebug = isMock;
+debugEnabled.subscribe((v) => (_isDebug = v));
+
+function debugLog(label: string, ...args: unknown[]): void {
+    if (!_isDebug) return;
+    const ts = new Date().toISOString().slice(11, 23); // HH:mm:ss.mmm
+    console.groupCollapsed(`%c[KSU ${ts}] ${label}`, 'color:#4fc3f7;font-weight:bold', ...args);
+    console.trace('call stack');
+    console.groupEnd();
+}
+
 // --- Module path resolution via ksu.moduleInfo() ----------------------------
 
 let cachedModDir: string | null = null;
@@ -14,9 +39,10 @@ function getModDir(): string {
     }
     try {
         const info = kernelsu.moduleInfo();
-        // moduleInfo() returns a string, typically the module base directory
-        // e.g. "/data/adb/modules/MagiskSSH"
-        cachedModDir = info.trim();
+        // moduleInfo() returns a JSON string, e.g.:
+        // {"moduleDir":"/data/adb/modules/ssh","id":"ssh",...}
+        const parsed = JSON.parse(info) as { moduleDir?: string };
+        cachedModDir = (parsed.moduleDir ?? '').trim() || '/data/adb/modules/MagiskSSH';
     } catch {
         cachedModDir = '/data/adb/modules/MagiskSSH';
     }
@@ -30,24 +56,38 @@ function getApiScript(): string {
 // --- exec wrapper (blocking, for quick operations) ---------------------------
 
 export async function exec(cmd: string): Promise<{ errno: number; stdout: string; stderr: string }> {
+    debugLog('exec ▶', { cmd });
+    const t0 = performance.now();
     if (isMock) {
         console.log(`[Mock KSU Exec]: ${cmd}`);
-        return mockExec(cmd);
+        const result = mockExec(cmd);
+        debugLog('exec ◀ (mock)', { ...result, ms: +(performance.now() - t0).toFixed(1) });
+        return result;
     }
-    return await kernelsu.exec(cmd);
+    const result = await kernelsu.exec(cmd);
+    debugLog('exec ◀', { ...result, ms: +(performance.now() - t0).toFixed(1) });
+    return result;
 }
 
 // High-level: call api.sh <action> [args...]
 export async function api(action: string, ...args: string[]): Promise<{ errno: number; stdout: string; stderr: string }> {
+    debugLog('api ▶', { action, args });
+    const t0 = performance.now();
     const cmd = `sh ${getApiScript()} ${action} ${args.join(' ')}`.trim();
-    return exec(cmd);
+    const result = await exec(cmd);
+    debugLog('api ◀', { action, ms: +(performance.now() - t0).toFixed(1), result });
+    return result;
 }
 
 // High-level: call api.sh <action> and pipe base64-encoded stdin content
 export async function apiWithStdin(action: string, content: string): Promise<{ errno: number; stdout: string; stderr: string }> {
+    debugLog('apiWithStdin ▶', { action, contentLength: content.length });
+    const t0 = performance.now();
     const b64 = btoa(unescape(encodeURIComponent(content)));
     const cmd = `echo '${b64}' | sh ${getApiScript()} ${action}`;
-    return exec(cmd);
+    const result = await exec(cmd);
+    debugLog('apiWithStdin ◀', { action, ms: +(performance.now() - t0).toFixed(1), result });
+    return result;
 }
 
 // --- spawn wrapper (non-blocking, for streaming) ------------------------------
@@ -59,14 +99,20 @@ export function spawn(
     onError: (err: string) => void,
     onExit: (code: number) => void
 ) {
+    debugLog('spawn ▶', { cmd, args });
     if (isMock) {
         console.log(`[Mock KSU Spawn]: ${cmd} ${args.join(' ')}`);
         const timer = setInterval(
-            () => onData(`[${new Date().toLocaleTimeString()}] Mock sshd log: Connection from 192.168.1.${Math.floor(Math.random() * 255)}\n`),
+            () => {
+                const line = `[${new Date().toLocaleTimeString()}] Mock sshd log: Connection from 192.168.1.${Math.floor(Math.random() * 255)}\n`;
+                debugLog('spawn data (mock)', line.trim());
+                onData(line);
+            },
             2000
         );
         setTimeout(() => {
             clearInterval(timer);
+            debugLog('spawn exit (mock)', { code: 0 });
             onExit(0);
         }, 60000);
         return () => clearInterval(timer);
@@ -74,11 +120,21 @@ export function spawn(
 
     const child = kernelsu.spawn(cmd, args);
 
-    child.stdout.on('data', (chunk: string) => onData(chunk));
-    child.stderr.on('data', (chunk: string) => onError(chunk));
-    child.on('exit', (code: number) => onExit(code));
+    child.stdout.on('data', (chunk: string) => {
+        debugLog('spawn stdout', chunk.trim());
+        onData(chunk);
+    });
+    child.stderr.on('data', (chunk: string) => {
+        debugLog('spawn stderr', chunk.trim());
+        onError(chunk);
+    });
+    child.on('exit', (code: number) => {
+        debugLog('spawn exit', { code });
+        onExit(code);
+    });
 
     return () => {
+        debugLog('spawn kill', { cmd });
         // kernelsu ChildProcess has no kill(), so we pkill the process
         kernelsu.exec(`pkill -f "${cmd}"`);
     };

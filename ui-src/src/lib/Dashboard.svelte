@@ -2,6 +2,7 @@
     import { onMount } from "svelte";
     import { api } from "./ksu";
     import { _ } from "svelte-i18n";
+    import { Play, Square } from "lucide-svelte";
 
     let status = $state("");
     let isRunning = $state(false);
@@ -49,33 +50,51 @@
 >
     <h2 class="text-lg font-semibold mb-4">{$_("app.status.title")}</h2>
 
-    <div
-        class="flex items-center justify-between mt-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg"
-    >
-        <div class="flex items-center gap-3">
-            <div
-                class="w-3 h-3 rounded-full {isRunning
-                    ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
-                    : 'bg-rose-500'}"
-            ></div>
-            <div>
+    <div class="mt-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg space-y-2">
+        <!-- 第一行：指示灯 + 状态文字 + 按钮 -->
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div
+                    class="w-3 h-3 rounded-full flex-shrink-0 {isRunning
+                        ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
+                        : 'bg-rose-500'}"
+                ></div>
                 <span class="font-medium">{status}</span>
-                {#if isRunning && pid}
-                    <span class="text-xs text-slate-400 ml-2"
-                        >PID: {pid} · Port: {port}</span
-                    >
-                {/if}
             </div>
+
+            <button
+                onclick={toggleService}
+                disabled={isToggling}
+                title={isRunning
+                    ? $_("app.status.btn_stop")
+                    : $_("app.status.btn_start")}
+                class="w-9 h-9 flex items-center justify-center rounded-full transition-colors disabled:opacity-50 {isRunning
+                    ? 'bg-rose-100 text-rose-600 hover:bg-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20'
+                    : 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20'}"
+            >
+                {#if isRunning}
+                    <Square
+                        class="w-4 h-4"
+                        fill="currentColor"
+                        stroke-width="0"
+                    />
+                {:else}
+                    <Play
+                        class="w-4 h-4"
+                        fill="currentColor"
+                        stroke-width="0"
+                    />
+                {/if}
+            </button>
         </div>
 
-        <button
-            onclick={toggleService}
-            disabled={isToggling}
-            class="px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 {isRunning
-                ? 'bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20'
-                : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20'}"
-        >
-            {isRunning ? $_("app.status.btn_stop") : $_("app.status.btn_start")}
-        </button>
+        <!-- 第二行：PID / Port 附加信息 -->
+        {#if isRunning && pid}
+            <div class="pl-6">
+                <span class="text-xs text-slate-400"
+                    >PID: {pid} · Port: {port}</span
+                >
+            </div>
+        {/if}
     </div>
 </div>

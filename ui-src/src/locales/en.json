@@ -1,6 +1,6 @@
 {
     "app": {
-        "title": "MagiskSSH Manager",
+        "title": "MagiskSSH",
         "status": {
             "title": "Service Status",
             "checking": "Checking...",

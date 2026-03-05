@@ -18,6 +18,8 @@
 #   delete_key    - Delete key at line number ($2)
 #   tail_log      - Tail -f the ssh log (for spawn, streaming)
 #   read_log      - Read ssh log snapshot (for exec, one-shot)
+#   read_log_from - Read log lines from offset $2 onwards, prints "<total>\n<lines>"
+#   clear_log     - Truncate the ssh log file
 # =============================================================================
 
 # --- Paths -------------------------------------------------------------------
@@ -255,6 +257,32 @@ do_read_log() {
   fi
 }
 
+# read_log_from <start_line>
+# Returns: first line = total line count of log file
+#          remaining lines = new content from start_line onwards
+do_read_log_from() {
+  local start="${1:-1}"
+  if [ ! -f "$LOG_FILE" ]; then
+    echo "0"
+    return 0
+  fi
+  local total
+  total=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
+  echo "$total"
+  if [ "$start" -le "$total" ]; then
+    tail -n +"$start" "$LOG_FILE"
+  fi
+}
+
+do_clear_log() {
+  if [ -f "$LOG_FILE" ]; then
+    : > "$LOG_FILE"
+    json_ok "Log cleared"
+  else
+    json_ok "Log file does not exist"
+  fi
+}
+
 # --- Main Dispatcher ---------------------------------------------------------
 
 ACTION="$1"
@@ -271,8 +299,10 @@ case "$ACTION" in
   write_keys)   do_write_keys "$1" ;;
   add_key)      do_add_key    "$1" ;;
   delete_key)   do_delete_key "$1" "$2" ;;
-  tail_log)     do_tail_log ;;
-  read_log)     do_read_log ;;
+  tail_log)      do_tail_log ;;
+  read_log)      do_read_log ;;
+  read_log_from) do_read_log_from "$1" ;;
+  clear_log)     do_clear_log ;;
   *)
     json_err "Unknown action: ${ACTION}"
     exit 1
