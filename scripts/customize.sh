@@ -66,7 +66,7 @@ rm -rf "$EXTRACT_TMP"
 # ── Step 8: Create binary symlinks via wrapper ────────────────────────
 ui_print "- Creating symlinks in /system/bin"
 for f in scp sftp sftp-server ssh ssh-keygen sshd sshd-session sshd-auth rsync; do
-  ln -sf $MODPATH/system/usr/libexec/ssh-core/wrapper "$MODPATH/system/bin/$f"
+  ln -sf /system/usr/libexec/ssh-core/wrapper "$MODPATH/system/bin/$f"
 done
 
 # ── Step 9: Set permissions ───────────────────────────────────────────
