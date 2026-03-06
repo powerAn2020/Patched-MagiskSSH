@@ -55,6 +55,10 @@ def patch_file(path):
         1,
     )
 
+    # 4. Remove hardcoded absolute paths for standard binaries
+    text = text.replace("CAT=/usr/bin/cat", "CAT=cat")
+    text = text.replace("KILL=/usr/bin/kill", "KILL=kill")
+
     if text == original:
         print(f"[patch_init] No changes needed in: {path}")
         return False
