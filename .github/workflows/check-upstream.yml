@@ -1,0 +1,54 @@
+name: Check Upstream Update
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Run daily at midnight UTC
+  workflow_dispatch:
+
+jobs:
+  check-and-trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Upstream and Local Versions
+        id: check
+        run: |
+          UPSTREAM_URL="https://gitlab.com/d4rcm4rc/MagiskSSH/-/raw/main/update.json"
+          LOCAL_URL="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/update.json"
+
+          echo "Fetching upstream update.json..."
+          UPSTREAM_HTTP_CODE=$(curl -sL -w "%{http_code}" -o upstream.json "$UPSTREAM_URL")
+          if [ "$UPSTREAM_HTTP_CODE" -ne 200 ]; then
+            echo "::error::Failed to fetch upstream update.json (HTTP $UPSTREAM_HTTP_CODE)"
+            exit 1
+          fi
+
+          echo "Fetching local update.json..."
+          LOCAL_HTTP_CODE=$(curl -sL -w "%{http_code}" -o local.json "$LOCAL_URL")
+          
+          UPSTREAM_VER=$(jq -r '.versionCode // 0' upstream.json)
+          if [ "$LOCAL_HTTP_CODE" -eq 200 ]; then
+            LOCAL_VER=$(jq -r '.versionCode // 0' local.json)
+          else
+            echo "Local release not found or unreachable. Defaulting local version to 0."
+            LOCAL_VER=0
+          fi
+
+          echo "Upstream versionCode: $UPSTREAM_VER"
+          echo "Local versionCode: $LOCAL_VER"
+          
+          if [ "$UPSTREAM_VER" -gt "$LOCAL_VER" ]; then
+            echo "check_result=update_found" >> $GITHUB_OUTPUT
+            echo "Update found!"
+          else
+            echo "check_result=up_to_date" >> $GITHUB_OUTPUT
+            echo "Already up-to-date."
+          fi
+
+      - name: Trigger Build Workflow
+        if: steps.check.outputs.check_result == 'update_found'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Triggering build-magisk-ssh.yml..."
+          gh workflow run build-magisk-ssh.yml
+          echo "Build workflow triggered successfully."
