@@ -14,7 +14,9 @@
             "title": "sshd_config",
             "editor_placeholder": "加载中...",
             "btn_save": "保存配置",
-            "btn_saving": "保存中..."
+            "btn_saving": "保存中...",
+            "save_success": "配置保存成功",
+            "save_failed": "配置保存失败"
         },
         "logs": {
             "title": "实时日志",

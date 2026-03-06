@@ -41,8 +41,20 @@ def patch_file(path):
     # 2. Ensure log directory exists before sshd starts
     text = text.replace(
         "start_service() {",
-        "start_service() {\n    mkdir -p $(dirname " + LOG_FILE + ")",
+        "start_service() {\n    "
+        "sed -i -E 's/^description=\\[✅running\\] |^description=\\[❌stopped\\] /^description=/g' /data/adb/modules/ssh/module.prop 2>/dev/null\n    "
+        "sed -i 's/^description=/description=[✅running] /g' /data/adb/modules/ssh/module.prop 2>/dev/null\n    "
+        "mkdir -p $(dirname " + LOG_FILE + ")",
         1,  # only replace first occurrence
+    )
+
+    # 3. Add stopped status to module.prop when service stops
+    text = text.replace(
+        "stop_service() {",
+        "stop_service() {\n    "
+        "sed -i -E 's/^description=\\[✅running\\] |^description=\\[❌stopped\\] /^description=/g' /data/adb/modules/ssh/module.prop 2>/dev/null\n    "
+        "sed -i 's/^description=/description=[❌stopped] /g' /data/adb/modules/ssh/module.prop 2>/dev/null",
+        1,
     )
 
     if text == original:

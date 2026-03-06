@@ -2,10 +2,14 @@
     import { api, apiWithStdin } from "./ksu";
     import { onMount } from "svelte";
     import { _ } from "svelte-i18n";
+    import Toast from "./Toast.svelte";
 
     let configContent = $state("");
     let isSaving = $state(false);
     let isLoading = $state(true);
+    let toast = $state<{ message: string; type: "success" | "error" } | null>(
+        null,
+    );
 
     async function loadConfig() {
         isLoading = true;
@@ -28,8 +32,15 @@
 
     async function saveConfig() {
         isSaving = true;
+        toast = null; // Clear previous toast
         try {
             await apiWithStdin("write_config", configContent);
+            toast = { message: $_("app.config.save_success"), type: "success" };
+        } catch (e: any) {
+            toast = {
+                message: $_("app.config.save_failed") + ": " + e.message,
+                type: "error",
+            };
         } finally {
             isSaving = false;
         }
@@ -37,6 +48,14 @@
 
     onMount(loadConfig);
 </script>
+
+{#if toast}
+    <Toast
+        message={toast.message}
+        type={toast.type}
+        onclose={() => (toast = null)}
+    />
+{/if}
 
 <div
     class="bg-white dark:bg-slate-900 shadow-sm rounded-xl p-6 border border-slate-200 dark:border-slate-800"

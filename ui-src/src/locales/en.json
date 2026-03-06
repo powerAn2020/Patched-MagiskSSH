@@ -14,7 +14,9 @@
             "title": "sshd_config",
             "editor_placeholder": "Loading...",
             "btn_save": "Save",
-            "btn_saving": "Saving..."
+            "btn_saving": "Saving...",
+            "save_success": "Configuration saved successfully.",
+            "save_failed": "Failed to save configuration."
         },
         "logs": {
             "title": "Real-time Logs",
