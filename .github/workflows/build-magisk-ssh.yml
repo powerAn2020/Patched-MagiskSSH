@@ -94,9 +94,14 @@ jobs:
           # .patch files (applied against source, not the build system)
           find . -type f -name "*.patch" \
             -exec sed -i 's|/data/ssh|/data/adb/ssh|g' {} +
+          # Patch service.sh to export MODDIR globally
+          [ -f common/service.sh ] && sed -i 's|MODDIR=${0%/\*}|export MODDIR=${0%/\*}|g' common/service.sh
+          [ -f service.sh ]        && sed -i 's|MODDIR=${0%/\*}|export MODDIR=${0%/\*}|g' service.sh
+
           echo "Patched runtime files:"
           grep -rl "/data/adb/ssh" . --include="*.sh" --include="*.conf" --include="*.patch" \
             --include="opensshd.init" 2>/dev/null || true
+          grep -l "export MODDIR" common/service.sh service.sh 2>/dev/null || true
 
       # configure flags 在 .mk 里的 --sysconfdir / --with-pid-dir，精确替换这两个 flag
       - name: Patch configure flags (/data/ssh -> /data/adb/ssh)

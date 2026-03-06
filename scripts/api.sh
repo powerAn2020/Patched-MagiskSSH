@@ -25,7 +25,7 @@
 
 # --- Paths -------------------------------------------------------------------
 # Derive MODDIR from this script's own location: .../scripts/api.sh → ...
-MODDIR="$(dirname "$(dirname "$(readlink -f "$0")")")"
+export MODDIR="$(dirname "$(dirname "$(readlink -f "$0")")")"
 
 # MagiskSSH stores persistent data under /data/adb/ssh (patched from /data/ssh)
 SSHDIR="/data/adb/ssh"
