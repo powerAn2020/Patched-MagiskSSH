@@ -8,6 +8,9 @@ on:
 jobs:
   check-and-trigger:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: Fetch Upstream and Local Versions
         id: check
