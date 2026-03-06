@@ -8,6 +8,8 @@
 
 # Derive MODDIR from this script's own location
 MODDIR=${0%/*}
+export MODDIR
+
 SSHDIR="/data/adb/ssh"
 
 PID_FILE="${SSHDIR}/sshd.pid"
