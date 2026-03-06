@@ -58,6 +58,19 @@ mkdir -p /data/adb/ssh /data/adb/ssh/root/.ssh /data/adb/ssh/shell/.ssh
 if [ ! -f /data/adb/ssh/sshd_config ]; then
   ui_print "- Installing default sshd_config"
   mv "$EXTRACT_TMP/common/sshd_config" /data/adb/ssh/sshd_config
+  
+  # Initialize flags on first fresh install:
+  # 1. Default Autostart: OFF
+  touch /data/adb/ssh/no-autostart
+  # 2. Default Keep Data on Uninstall: ON
+  touch /data/adb/ssh/KEEP_ON_UNINSTALL
+fi
+
+# Ensure lastlog exists so sshd can write without errors
+if [ ! -f /data/adb/ssh/lastlog ]; then
+  ui_print "- Creating empty lastlog file"
+  touch /data/adb/ssh/lastlog
+  chmod 644 /data/adb/ssh/lastlog
 fi
 
 rm -rf $EXTRACT_TMP/common $EXTRACT_TMP/META-INF

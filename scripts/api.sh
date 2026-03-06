@@ -305,6 +305,32 @@ do_clear_log() {
   fi
 }
 
+do_get_settings() {
+  local autostart="true"
+  local keep_data="false"
+  [ -f "${SSHDIR}/no-autostart" ] && autostart="false"
+  [ -f "${SSHDIR}/KEEP_ON_UNINSTALL" ] && keep_data="true"
+  printf '{"errno":0,"stdout":"{\\"autostart\\":%s,\\"keep_data\\":%s}","stderr":""}\n' "$autostart" "$keep_data"
+}
+
+do_set_settings() {
+  local autostart="$1"
+  local keep_data="$2"
+  
+  if [ "$autostart" = "true" ]; then
+    rm -f "${SSHDIR}/no-autostart"
+  else
+    touch "${SSHDIR}/no-autostart"
+  fi
+
+  if [ "$keep_data" = "true" ]; then
+    touch "${SSHDIR}/KEEP_ON_UNINSTALL"
+  else
+    rm -f "${SSHDIR}/KEEP_ON_UNINSTALL"
+  fi
+  json_ok "Settings updated"
+}
+
 # --- Main Dispatcher ---------------------------------------------------------
 
 ACTION="$1"
@@ -326,6 +352,8 @@ case "$ACTION" in
   read_log)      do_read_log ;;
   read_log_from) do_read_log_from "$1" ;;
   clear_log)     do_clear_log ;;
+  get_settings)  do_get_settings ;;
+  set_settings)  do_set_settings "$1" "$2" ;;
   *)
     json_err "Unknown action: ${ACTION}"
     exit 1

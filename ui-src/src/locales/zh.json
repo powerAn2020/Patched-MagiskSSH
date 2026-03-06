@@ -8,7 +8,13 @@
             "stopped": "已停止",
             "toggling": "切换中...",
             "btn_start": "启动服务",
-            "btn_stop": "停止服务"
+            "btn_stop": "停止服务",
+            "settings": "模块设置",
+            "autostart": "开机自启",
+            "autostart_desc": "在设备启动后自动运行 sshd 服务。",
+            "keep_data": "卸载保留数据",
+            "keep_data_desc": "在 Magisk 卸载模块时保留位于 /data/adb/ssh/ 下的配置与密钥。",
+            "saving_settings": "保存设置中..."
         },
         "config": {
             "title": "sshd_config",

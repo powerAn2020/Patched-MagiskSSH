@@ -109,6 +109,8 @@ jobs:
               -e 's|sysconfdir=/data/ssh|sysconfdir=/data/adb/ssh|g' \
               -e 's|piddir=/data/ssh|piddir=/data/adb/ssh|g' \
               "$f"
+            # Change utmp and wtmp to disabled, but explicitly redirect lastlog to module path
+            sed -i 's|--disable-wtmpx|--disable-wtmpx --disable-pututline --disable-pututxline --with-lastlog=/data/adb/ssh/lastlog|g' "$f"
             echo "  Patched configure flags in: $f"
           done
 
@@ -138,11 +140,11 @@ jobs:
             echo "::error::No module zip found after build!"
             exit 1
           fi
-          
+
           # Rename zip to the desired final name
           mv "$MODULE_ZIP" "Patched-MagiskSSH.zip"
           MODULE_ZIP="Patched-MagiskSSH.zip"
-          
+
           echo "Injecting WebUI, scripts and customize.sh into $MODULE_ZIP..."
           INJECT_DIR=$(mktemp -d)
           mkdir -p "$INJECT_DIR/webroot" "$INJECT_DIR/scripts"
@@ -173,11 +175,11 @@ jobs:
           else
             echo "updateJson=${UPDATE_JSON_URL}" >> "$INJECT_DIR/module.prop"
           fi
-          
+
           # Extract upstream information for creating our own update.json
           UPSTREAM_VERSION=$(grep "^version=" "$INJECT_DIR/module.prop" | cut -d'=' -f2)
           UPSTREAM_VCODE=$(grep "^versionCode=" "$INJECT_DIR/module.prop" | cut -d'=' -f2)
-          
+
           cat <<EOF > "$GITHUB_WORKSPACE/magisk-ssh/build/update.json"
           {
               "version": "${UPSTREAM_VERSION}",
@@ -187,7 +189,7 @@ jobs:
           }
           EOF
           echo "Generated update.json for release."
-          
+
           # Pass version info to the next steps for Release naming
           echo "MODULE_VERSION=${UPSTREAM_VERSION}" >> $GITHUB_ENV
           echo "MODULE_VCODE=${UPSTREAM_VCODE}" >> $GITHUB_ENV
@@ -196,7 +198,7 @@ jobs:
           mkdir -p "$INJECT_DIR/common"
           unzip -p "$ABS_ZIP" common/opensshd.init > "$INJECT_DIR/common/opensshd.init"
           (cd "$INJECT_DIR" && python3 "$GITHUB_WORKSPACE/tools/patch_init.py")
-          
+
           # Inject new files into zip
           (cd "$INJECT_DIR" && zip -r "$ABS_ZIP" module.prop common/opensshd.init customize.sh action.sh webroot/ scripts/)
 

@@ -8,7 +8,13 @@
             "stopped": "Stopped",
             "toggling": "Toggling...",
             "btn_start": "Start Service",
-            "btn_stop": "Stop Service"
+            "btn_stop": "Stop Service",
+            "settings": "Module Settings",
+            "autostart": "Boot Autostart",
+            "autostart_desc": "Start sshd service automatically after device boots.",
+            "keep_data": "Keep Data on Uninstall",
+            "keep_data_desc": "Preserve config and keys in /data/adb/ssh/ when module is uninstalled.",
+            "saving_settings": "Saving settings..."
         },
         "config": {
             "title": "sshd_config",

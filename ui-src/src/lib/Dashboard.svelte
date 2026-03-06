@@ -11,6 +11,23 @@
     let ip = $state("");
     let isToggling = $state(false);
 
+    // 新增状态：设置
+    let autostart = $state(false);
+    let keepData = $state(true);
+    let isSavingSettings = $state(false);
+
+    async function toggleSetting(type: "autostart" | "keepData") {
+        if (isSavingSettings) return;
+        isSavingSettings = true;
+        try {
+            if (type === "autostart") autostart = !autostart;
+            if (type === "keepData") keepData = !keepData;
+            await api("set_settings", String(autostart), String(keepData));
+        } finally {
+            isSavingSettings = false;
+        }
+    }
+
     async function checkStatus() {
         status = $_("app.status.checking");
         try {
@@ -48,6 +65,15 @@
         api("get_ip")
             .then((res) => {
                 ip = res.stdout.trim();
+            })
+            .catch(() => {});
+
+        // 获取设置
+        api("get_settings")
+            .then((res) => {
+                const data = JSON.parse(res.stdout);
+                autostart = data.autostart;
+                keepData = data.keep_data;
             })
             .catch(() => {});
     });
@@ -103,11 +129,75 @@
                     <span class="text-xs text-slate-400">IP: {ip}</span>
                 {/if}
                 {#if isRunning && pid}
-                    <span class="text-xs text-slate-400"
-                        >PID: {pid} · Port: {port}</span
-                    >
+                    <span class="text-xs text-slate-400">PID: {pid}</span>
+                    <span class="text-xs text-slate-400">Port: {port}</span>
                 {/if}
             </div>
         {/if}
+    </div>
+
+    <!-- 模块附加设置 (Autostart & Keep Data) -->
+    <div
+        class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-4"
+    >
+        <h3
+            class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2"
+        >
+            {$_("app.status.settings")}
+        </h3>
+
+        <!-- 开机自启 -->
+        <div class="flex items-start justify-between">
+            <div class="flex flex-col gap-0.5">
+                <span class="text-sm font-medium"
+                    >{$_("app.status.autostart")}</span
+                >
+                <span class="text-xs text-slate-500 dark:text-slate-400"
+                    >{$_("app.status.autostart_desc")}</span
+                >
+            </div>
+            <button
+                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus:outline-none p-1 {autostart
+                    ? 'bg-emerald-500'
+                    : 'bg-slate-200 dark:bg-slate-700'}"
+                role="switch"
+                aria-checked={autostart}
+                onclick={() => toggleSetting("autostart")}
+                disabled={isSavingSettings}
+            >
+                <span
+                    class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ease-in-out {autostart
+                        ? 'translate-x-5'
+                        : 'translate-x-0'}"
+                ></span>
+            </button>
+        </div>
+
+        <!-- 卸载保留数据 -->
+        <div class="flex items-start justify-between">
+            <div class="flex flex-col gap-0.5">
+                <span class="text-sm font-medium"
+                    >{$_("app.status.keep_data")}</span
+                >
+                <span class="text-xs text-slate-500 dark:text-slate-400"
+                    >{$_("app.status.keep_data_desc")}</span
+                >
+            </div>
+            <button
+                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus:outline-none p-1 {keepData
+                    ? 'bg-emerald-500'
+                    : 'bg-slate-200 dark:bg-slate-700'}"
+                role="switch"
+                aria-checked={keepData}
+                onclick={() => toggleSetting("keepData")}
+                disabled={isSavingSettings}
+            >
+                <span
+                    class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ease-in-out {keepData
+                        ? 'translate-x-5'
+                        : 'translate-x-0'}"
+                ></span>
+            </button>
+        </div>
     </div>
 </div>

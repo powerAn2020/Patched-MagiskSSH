@@ -187,5 +187,18 @@ function mockExec(cmd: string): { errno: number; stdout: string; stderr: string 
             stderr: '',
         };
     }
+    if (cmd.includes('get_ip')) {
+        return { errno: 0, stdout: '192.168.1.100', stderr: '' };
+    }
+    if (cmd.includes('get_settings')) {
+        return {
+            errno: 0,
+            stdout: '{"errno":0,"stdout":"{\\"autostart\\":false,\\"keep_data\\":true}","stderr":""}',
+            stderr: '',
+        };
+    }
+    if (cmd.includes('set_settings')) {
+        return { errno: 0, stdout: '{"errno":0,"stdout":"Settings updated","stderr":""}', stderr: '' };
+    }
     return { errno: 0, stdout: '{"errno":0,"stdout":"OK","stderr":""}', stderr: '' };
 }
