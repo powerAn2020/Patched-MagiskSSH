@@ -7,7 +7,7 @@
 # =============================================================================
 
 # Derive MODDIR from this script's own location
-MODDIR="$(dirname "$(dirname "$(readlink -f "$0")")")"
+MODDIR=${0%/*}
 SSHDIR="/data/adb/ssh"
 
 PID_FILE="${SSHDIR}/sshd.pid"
