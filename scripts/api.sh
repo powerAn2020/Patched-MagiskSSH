@@ -25,7 +25,7 @@
 
 # --- Paths -------------------------------------------------------------------
 # Derive MODDIR from this script's own location: .../scripts/api.sh → ...
-export MODDIR="$(dirname "$(dirname "$(readlink -f "$0")")")"
+MODDIR="$(dirname "$(dirname "$(readlink -f "$0")")")"
 
 # MagiskSSH stores persistent data under /data/adb/ssh (patched from /data/ssh)
 SSHDIR="/data/adb/ssh"
@@ -57,7 +57,9 @@ INIT_SCRIPT="${MODDIR}/opensshd.init"
 # --- Helpers -----------------------------------------------------------------
 
 json_escape() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+  # 1. 逃逸反斜杠和引号
+  # 2. 将换行符转为 \n
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN { ORS="\\n" } { print }' | sed 's/\\n$//'
 }
 
 json_ok() {
@@ -96,15 +98,14 @@ ensure_dirs() {
 # --- Actions -----------------------------------------------------------------
 
 do_status() {
-  local pid port
+  local pid port running="false"
   pid=$(get_pid)
   if [ -n "$pid" ]; then
+    running="true"
     port=$(grep -i "^Port " "$SSHD_CONFIG" 2>/dev/null | awk '{print $2}')
     [ -z "$port" ] && port="22"
-    printf '{"running":true,"pid":"%s","port":"%s"}\n' "$pid" "$port"
-  else
-    printf '{"running":false,"pid":"","port":""}\n'
   fi
+  json_ok "{\"running\":$running,\"pid\":\"$pid\",\"port\":\"$port\"}"
 }
 
 do_get_ip() {
@@ -116,7 +117,10 @@ do_get_ip() {
          | awk '{print $2}' \
          | cut -d'/' -f1 \
          | head -1)
-    [ -n "$ip" ] && echo "$ip" && return 0
+    if [ -n "$ip" ]; then
+        json_ok "$ip"
+        return 0
+    fi
   done
   # fallback: 取所有非 127.x 的 inet 地址里的第一个
   ip=$(ip addr 2>/dev/null \
@@ -125,7 +129,7 @@ do_get_ip() {
        | awk '{print $2}' \
        | cut -d'/' -f1 \
        | head -1)
-  echo "${ip:-unknown}"
+  json_ok "${ip:-unknown}"
 }
 
 do_start() {
@@ -189,7 +193,9 @@ do_restart() {
 
 do_read_config() {
   if [ -f "$SSHD_CONFIG" ]; then
-    base64 "$SSHD_CONFIG"
+    local content
+    content=$(base64 "$SSHD_CONFIG")
+    json_ok "$content"
   else
     json_err "Config file not found: ${SSHD_CONFIG}"
     return 1
@@ -213,9 +219,11 @@ do_read_keys() {
   target=$(get_keys_file "$1")
   ensure_dirs
   if [ -f "$target" ]; then
-    cat "$target"
+    local content
+    content=$(cat "$target")
+    json_ok "$content"
   else
-    echo ""
+    json_ok ""
   fi
 }
 
@@ -273,9 +281,11 @@ do_tail_log() {
 
 do_read_log() {
   if [ -f "$LOG_FILE" ]; then
-    tail -n 200 "$LOG_FILE"
+    local content
+    content=$(tail -n 200 "$LOG_FILE")
+    json_ok "$content"
   else
-    echo ""
+    json_ok ""
   fi
 }
 
@@ -285,14 +295,17 @@ do_read_log() {
 do_read_log_from() {
   local start="${1:-1}"
   if [ ! -f "$LOG_FILE" ]; then
-    echo "0"
+    json_ok "0"
     return 0
   fi
-  local total
+  local total output
   total=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
-  echo "$total"
   if [ "$start" -le "$total" ]; then
-    tail -n +"$start" "$LOG_FILE"
+    output=$(tail -n +"$start" "$LOG_FILE")
+    json_ok "${total}
+${output}"
+  else
+    json_ok "${total}"
   fi
 }
 
@@ -310,7 +323,7 @@ do_get_settings() {
   local keep_data="false"
   [ -f "${SSHDIR}/no-autostart" ] && autostart="false"
   [ -f "${SSHDIR}/KEEP_ON_UNINSTALL" ] && keep_data="true"
-  printf '{"errno":0,"stdout":"{\\"autostart\\":%s,\\"keep_data\\":%s}","stderr":""}\n' "$autostart" "$keep_data"
+  json_ok "{\"autostart\":$autostart,\"keep_data\":$keep_data}"
 }
 
 do_set_settings() {

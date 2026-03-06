@@ -15,15 +15,15 @@
         isLoading = true;
         try {
             const res = await api("read_config");
-            // api.sh read_config returns base64-encoded content
-            if (res.stdout.trim()) {
-                configContent = decodeURIComponent(
-                    escape(atob(res.stdout.trim())),
-                );
+            const outer = JSON.parse(res.stdout);
+            const b64 = outer.stdout || "";
+            if (b64.trim()) {
+                configContent = decodeURIComponent(escape(atob(b64.trim())));
             } else {
                 configContent = "";
             }
-        } catch {
+        } catch (e) {
+            console.error("[Config] Load failed", e);
             configContent = "";
         } finally {
             isLoading = false;

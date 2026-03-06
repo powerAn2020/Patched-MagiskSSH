@@ -1,22 +1,28 @@
 import * as kernelsu from 'kernelsu';
 
 const isMock = import.meta.env.DEV;
+const DEBUG_STORAGE_KEY = 'magisk_ssh_debug_enabled';
 
 // --- Debug mode --------------------------------------------------------------
-// 默认关闭，刷新页面后重置，不做持久化；通过首页开关手动开启
+// 默认从 localStorage 读取，做持久化
 import { writable } from 'svelte/store';
 
-export const debugEnabled = writable(false);
+// 初始值逻辑：localStorage 优先，开发模式默认开启（如果没存过）
+const storedDebug = localStorage.getItem(DEBUG_STORAGE_KEY);
+const initialDebug = storedDebug !== null ? storedDebug === 'true' : isMock;
+
+export const debugEnabled = writable(initialDebug);
 
 export function toggleDebug(): void {
     debugEnabled.update((v) => {
         const next = !v;
+        localStorage.setItem(DEBUG_STORAGE_KEY, String(next));
         console.trace(`[KSU] Debug mode → ${next ? 'ON' : 'OFF'}`);
         return next;
     });
 }
 
-let _isDebug = isMock;
+let _isDebug = initialDebug;
 debugEnabled.subscribe((v) => (_isDebug = v));
 
 function debugLog(label: string, ...args: unknown[]): void {
@@ -153,7 +159,7 @@ export function spawnLogTail(
 
 function mockExec(cmd: string): { errno: number; stdout: string; stderr: string } {
     if (cmd.includes('status')) {
-        return { errno: 0, stdout: '{"running":true,"pid":"1234","port":"22"}', stderr: '' };
+        return { errno: 0, stdout: '{"errno":0,"stdout":"{\\"running\\":true,\\"pid\\":\\"1234\\",\\"port\\":\\"22\\"}","stderr":""}', stderr: '' };
     }
     if (cmd.includes('start')) {
         return { errno: 0, stdout: '{"errno":0,"stdout":"sshd started (pid 1234)","stderr":""}', stderr: '' };
@@ -170,25 +176,31 @@ function mockExec(cmd: string): { errno: number; stdout: string; stderr: string 
             'AuthorizedKeysFile .ssh/authorized_keys',
             'Subsystem sftp /usr/libexec/sftp-server',
         ].join('\n');
-        // Return base64-encoded mock config
-        return { errno: 0, stdout: btoa(unescape(encodeURIComponent(cfg))), stderr: '' };
+        const b64 = btoa(unescape(encodeURIComponent(cfg)));
+        return { errno: 0, stdout: `{"errno":0,"stdout":"${b64}","stderr":""}`, stderr: '' };
     }
     if (cmd.includes('read_keys')) {
+        const keys = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample1234567890 user@device\nssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgExample admin@workstation';
+        return { errno: 0, stdout: `{"errno":0,"stdout":"${keys.replace(/\n/g, '\\n')}","stderr":""}`, stderr: '' };
+    }
+    if (cmd.includes('read_log_from')) {
+        const lines = Array.from({ length: 5 }, (_, i) => `[mock] sshd log line ${i + 1}`).join('\\n');
         return {
             errno: 0,
-            stdout: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample1234567890 user@device\nssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgExample admin@workstation',
+            stdout: `{"errno":0,"stdout":"10\\n${lines}","stderr":""}`,
             stderr: '',
         };
     }
     if (cmd.includes('read_log')) {
+        const lines = Array.from({ length: 10 }, (_, i) => `[mock] sshd log line ${i + 1}`).join('\\n');
         return {
             errno: 0,
-            stdout: Array.from({ length: 10 }, (_, i) => `[mock] sshd log line ${i + 1}`).join('\n'),
+            stdout: `{"errno":0,"stdout":"${lines}","stderr":""}`,
             stderr: '',
         };
     }
     if (cmd.includes('get_ip')) {
-        return { errno: 0, stdout: '192.168.1.100', stderr: '' };
+        return { errno: 0, stdout: '{"errno":0,"stdout":"192.168.1.100","stderr":""}', stderr: '' };
     }
     if (cmd.includes('get_settings')) {
         return {

@@ -25,13 +25,16 @@
         isLoading = true;
         try {
             const res = await api("read_keys", user);
-            keysByUser[user] = res.stdout.trim()
-                ? res.stdout
+            const outer = JSON.parse(res.stdout);
+            const rawKeys = outer.stdout || "";
+            keysByUser[user] = rawKeys.trim()
+                ? rawKeys
                       .trim()
                       .split("\n")
-                      .filter((k) => k.trim() !== "")
+                      .filter((k: string) => k.trim() !== "")
                 : [];
-        } catch {
+        } catch (e) {
+            console.error("[Keys] Load failed", e);
             keysByUser[user] = [];
         } finally {
             isLoading = false;

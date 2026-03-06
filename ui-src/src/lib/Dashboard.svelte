@@ -32,14 +32,17 @@
         status = $_("app.status.checking");
         try {
             const res = await api("status");
-            const data = JSON.parse(res.stdout);
+            // res.stdout 是 "{"errno":0,"stdout":"{\"running\":...}","stderr":""}"
+            const outer = JSON.parse(res.stdout);
+            const data = JSON.parse(outer.stdout);
             isRunning = data.running;
             pid = data.pid || "";
             port = data.port || "22";
             status = isRunning
                 ? $_("app.status.running")
                 : $_("app.status.stopped");
-        } catch {
+        } catch (e) {
+            console.error("[Status] Check failed:", e);
             status = $_("app.status.stopped");
             isRunning = false;
         }
@@ -64,18 +67,27 @@
         checkStatus();
         api("get_ip")
             .then((res) => {
-                ip = res.stdout.trim();
+                const outer = JSON.parse(res.stdout);
+                ip = outer.stdout.trim();
             })
             .catch(() => {});
 
         // 获取设置
         api("get_settings")
             .then((res) => {
-                const data = JSON.parse(res.stdout);
-                autostart = data.autostart;
-                keepData = data.keep_data;
+                try {
+                    const outer = JSON.parse(res.stdout);
+                    // 业务 JSON 还在 stdout 里
+                    const data = JSON.parse(outer.stdout);
+                    autostart = data.autostart ?? false;
+                    keepData = data.keep_data ?? true;
+                } catch (e) {
+                    console.error("[Settings] Parse error:", e, res.stdout);
+                }
             })
-            .catch(() => {});
+            .catch((err) => {
+                console.error("[Settings] Fetch error:", err);
+            });
     });
 </script>
 
@@ -162,6 +174,7 @@
                     : 'bg-slate-200 dark:bg-slate-700'}"
                 role="switch"
                 aria-checked={autostart}
+                aria-label={$_("app.status.autostart")}
                 onclick={() => toggleSetting("autostart")}
                 disabled={isSavingSettings}
             >
@@ -189,6 +202,7 @@
                     : 'bg-slate-200 dark:bg-slate-700'}"
                 role="switch"
                 aria-checked={keepData}
+                aria-label={$_("app.status.keep_data")}
                 onclick={() => toggleSetting("keepData")}
                 disabled={isSavingSettings}
             >

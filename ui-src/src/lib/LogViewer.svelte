@@ -26,8 +26,13 @@
     async function poll() {
         try {
             const res = await api("read_log_from", String(nextLine));
-            const lines = res.stdout.split("\n");
-            if (lines.length === 0) return;
+            // res.stdout 是 "{"errno":0,"stdout":"total\nlines...","stderr":""}"
+            const outer = JSON.parse(res.stdout);
+            const raw = outer.stdout || "";
+            const lines = raw.split("\n");
+
+            if (lines.length === 0 || (lines.length === 1 && lines[0] === ""))
+                return;
 
             const total = parseInt(lines[0], 10);
             if (isNaN(total)) return;
@@ -35,14 +40,15 @@
             // 文件被清空（clear_log 后 total 归 0），重置偏移
             if (total === 0 || total < nextLine - 1) {
                 nextLine = 1;
+                logs = []; // 也重置本地日志显示
                 return;
             }
 
             const newLines = lines.slice(1).filter(Boolean);
             nextLine = total + 1;
             appendLines(newLines);
-        } catch {
-            // 静默忽略，等下次轮询
+        } catch (e) {
+            console.error("[Logs] Poll failed", e);
         }
     }
 
