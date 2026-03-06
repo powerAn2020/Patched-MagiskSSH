@@ -217,7 +217,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.MODULE_VERSION }}
-          name: Release ${{ env.MODULE_VERSION }} (Commit ${{ env.REPO_COMMIT }})
+          name: Release ${{ env.MODULE_VERSION }} (Commit ${{ github.sha }})
           files: |
             magisk-ssh/build/Patched-MagiskSSH.zip
             magisk-ssh/build/update.json
